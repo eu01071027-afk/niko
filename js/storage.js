@@ -372,3 +372,130 @@ function isSunday(dateStr) {
   var d = new Date(dateStr + 'T00:00:00');
   return d.getDay() === 0;
 }
+
+// ============================================================
+// Chat History
+// ============================================================
+
+function getChatHistory() {
+  return storageGet('niko_chatHistory', []);
+}
+
+function addChatMessage(role, content) {
+  var history = getChatHistory();
+  // Keep last 200 messages max
+  if (history.length > 200) history = history.slice(-200);
+  history.push({
+    role: role,
+    content: content,
+    timestamp: new Date().toISOString()
+  });
+  storageSet('niko_chatHistory', history);
+}
+
+function getRecentChatContext(count) {
+  var history = getChatHistory();
+  return history.slice(-count);
+}
+
+// ============================================================
+// 7-Day Memory
+// ============================================================
+
+function getMemorySummary() {
+  return storageGet('niko_memorySummary', '');
+}
+
+function setMemorySummary(summary) {
+  storageSet('niko_memorySummary', summary);
+  storageSet('niko_memoryDate', getTodayDate());
+}
+
+function getMemoryDate() {
+  return storageGet('niko_memoryDate', '');
+}
+
+// Build a 7-day behavior summary for prompts
+function buildBehaviorMemory() {
+  var behaviors = getDailyBehaviors();
+  behaviors.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+  var recent = behaviors.slice(0, 7);
+  var parts = [];
+  for (var i = 0; i < recent.length; i++) {
+    var b = recent[i];
+    if (!b.submittedAt) continue;
+    var dayParts = [];
+    for (var key in b.domains) {
+      if (b.domains[key] && b.domains[key].note) {
+        dayParts.push(key + '：' + b.domains[key].note);
+      }
+    }
+    if (dayParts.length > 0) {
+      parts.push(b.date + ' ' + dayParts.join('；'));
+    }
+  }
+  return parts.length > 0 ? parts.join('\n') : '（暂无记录）';
+}
+
+// ============================================================
+// Mood Tracking
+// ============================================================
+
+function getTodayMood() {
+  return storageGet('niko_todayMood', null);
+}
+
+function setTodayMood(mood) {
+  storageSet('niko_todayMood', { mood: mood, date: getTodayDate() });
+  // Also store in mood history
+  var moods = storageGet('niko_moodHistory', []);
+  moods.push({ mood: mood, date: getTodayDate(), time: new Date().toISOString() });
+  if (moods.length > 90) moods = moods.slice(-90);
+  storageSet('niko_moodHistory', moods);
+}
+
+function getMoodHistory(days) {
+  var moods = storageGet('niko_moodHistory', []);
+  return moods.slice(-days);
+}
+
+// ============================================================
+// Challenges
+// ============================================================
+
+function getActiveChallenges() {
+  return storageGet('niko_challenges', []);
+}
+
+function addChallenge(description, days) {
+  var challenges = getActiveChallenges();
+  var startDate = getTodayDate();
+  var endDate = getDateOffset(startDate, days || 3);
+  challenges.push({
+    id: 'ch_' + Date.now(),
+    description: description,
+    startDate: startDate,
+    endDate: endDate,
+    progress: {}
+  });
+  storageSet('niko_challenges', challenges);
+}
+
+function markChallengeDay(challengeId, done) {
+  var challenges = getActiveChallenges();
+  for (var i = 0; i < challenges.length; i++) {
+    if (challenges[i].id === challengeId) {
+      challenges[i].progress[getTodayDate()] = done;
+      storageSet('niko_challenges', challenges);
+      return true;
+    }
+  }
+  return false;
+}
+
+function cleanExpiredChallenges() {
+  var challenges = getActiveChallenges();
+  var today = getTodayDate();
+  challenges = challenges.filter(function(c) { return c.endDate >= today; });
+  storageSet('niko_challenges', challenges);
+}
