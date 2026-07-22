@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Niko — 傲娇黑猫的每日塔罗</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ========== 邀请码门禁 ========== -->
+  <div id="invite-gate" class="invite-gate">
+    <div class="invite-gate-bg"></div>
+    <div class="invite-gate-card">
+      <img src="images/niko-portrait.jpg" alt="Niko" class="invite-niko-img">
+      <h1 class="invite-title">✦ NIKO ✦</h1>
+      <p class="invite-subtitle">傲娇黑猫的每日塔罗</p>
+      <div class="invite-divider"></div>
+      <p class="invite-hint">输入邀请码以进入</p>
+      <div class="invite-input-row">
+        <input type="text" id="invite-input" class="invite-input"
+               placeholder="XXXX-XXXX" maxlength="9" autocomplete="off">
+        <button class="btn btn-primary" id="btn-invite-submit">进入</button>
+      </div>
+      <p class="invite-error hidden" id="invite-error">邀请码无效，再试试？</p>
+    </div>
+  </div>
+
+  <!-- ========== 扇形抽牌浮层 ========== -->
+  <div id="draw-overlay" class="draw-overlay hidden">
+    <div class="draw-overlay-bg"></div>
+    <div class="draw-overlay-content">
+      <!-- Niko 对话区 -->
+      <div class="draw-chat" id="draw-chat"></div>
+      <!-- 扇形牌堆 -->
+      <div class="fan-deck-stage">
+        <div class="fan-deck-container" id="fan-deck"></div>
+      </div>
+      <!-- 已选区 -->
+      <div class="selected-zone" id="selected-zone">
+        <div class="selected-label">已选：<span id="selected-count">0</span> / 3</div>
+        <div class="selected-slots" id="selected-slots"></div>
+      </div>
+      <!-- 操作按钮 -->
+      <div class="draw-actions" id="draw-actions">
+        <button class="btn btn-primary btn-lg" id="btn-confirm-draw" disabled>🔮 确认抽牌</button>
+        <button class="btn btn-ghost" id="btn-reset-draw">🔄 重新选择</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 主界面 ========== -->
+  <div id="app">
+    <!-- 顶栏 -->
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <span class="top-bar-brand">✦ NIKO ✦</span>
+      </div>
+      <div class="top-bar-center" id="top-bar-niko" title="点击戳戳 Niko">
+        <img class="niko-portrait" src="images/niko-portrait.jpg" alt="Niko" id="niko-portrait-img">
+        <span class="top-bar-niko-name">Niko</span>
+      </div>
+      <div class="top-bar-right">
+        <div class="affection-bar-wrapper">
+          <span class="affection-label">好感度</span>
+          <div class="affection-bar-bg">
+            <div class="affection-bar-fill" id="affection-bar-fill" style="width:0%"></div>
+          </div>
+          <span class="affection-value" id="affection-value">0</span>
+        </div>
+        <button class="btn-icon" id="btn-export" title="导出数据">📤</button>
+        <button class="btn-icon" id="btn-config" title="设置">⚙️</button>
+      </div>
+    </header>
+
+    <!-- 两泳道主内容 -->
+    <div class="main-content">
+      <!-- Lane 1: 左侧 35% -->
+      <aside class="lane lane-1" id="lane-1">
+        <!-- 日期切换器 -->
+        <div class="lane-section date-switcher" id="lane1-date-switcher">
+          <button class="date-arrow" id="btn-prev-date" title="前一天">◀</button>
+          <span class="date-display" id="date-display"></span>
+          <button class="date-arrow" id="btn-today" title="回到今天">●</button>
+          <button class="date-arrow" id="btn-next-date" title="后一天">▶</button>
+        </div>
+
+        <!-- 三张牌展示 -->
+        <div class="lane-section" id="lane1-cards-section">
+          <div class="section-title">🃏 今日牌阵</div>
+          <div class="lane1-cards" id="lane1-cards"></div>
+        </div>
+
+        <!-- 迷你日历热力图 -->
+        <div class="lane-section" id="lane1-calendar-section">
+          <div class="section-title">📊 本月活跃</div>
+          <div class="mini-calendar" id="mini-calendar"></div>
+        </div>
+
+        <!-- 塔罗图鉴收集 -->
+        <div class="lane-section" id="lane1-collection-section">
+          <div class="section-title">📚 塔罗图鉴</div>
+          <div class="collection-summary" id="collection-summary">
+            <span class="collection-progress-text" id="collection-progress-text">已收集：0 / 22</span>
+            <div class="collection-mini-bar">
+              <div class="collection-mini-fill" id="collection-mini-fill" style="width:0%"></div>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-open-collection">查看收集墙</button>
+        </div>
+
+        <!-- Niko 今日状态 -->
+        <div class="lane-section" id="lane1-niko-section">
+          <div class="niko-status-card">
+            <span class="niko-status-emoji" id="niko-status-emoji">😼</span>
+            <div class="niko-status-text" id="niko-status-text">…来了啊。</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Lane 2: 右侧 65% -->
+      <main class="lane lane-2" id="lane-2">
+        <!-- AI 综合解读 -->
+        <div class="lane-section" id="lane2-reading-section">
+          <div class="section-title">🔮 塔罗综合分析</div>
+          <div class="reading-card" id="lane2-reading-card">
+            <div class="reading-loading hidden" id="reading-loading">
+              <span class="loading-emoji">😼</span>
+              <span class="loading-text" id="loading-text">让我看看命运的丝线…</span>
+              <div class="loading-dots"><span></span><span></span><span></span></div>
+            </div>
+            <div class="reading-content" id="reading-content"></div>
+          </div>
+        </div>
+
+        <!-- 四大领域建议 -->
+        <div class="lane-section" id="lane2-suggestions-section">
+          <div class="section-title">📋 今日建议</div>
+          <div class="suggestions-grid" id="suggestions-grid"></div>
+        </div>
+
+        <!-- 行为记录表单 -->
+        <div class="lane-section" id="lane2-behavior-section">
+          <div class="section-title">📝 记录今天做了什么</div>
+          <div class="behavior-niko-msg" id="behavior-niko-msg"></div>
+          <div class="behavior-form-grid" id="behavior-form-grid"></div>
+          <div class="behavior-submit-area" id="behavior-submit-area">
+            <button class="btn btn-primary" id="btn-submit-behavior">💾 提交记录</button>
+            <span class="behavior-hint" id="behavior-hint">至少填一项，Niko 才不会生气</span>
+          </div>
+        </div>
+
+        <!-- Niko 傲娇回应 -->
+        <div class="lane-section hidden" id="lane2-responses-section">
+          <div class="section-title">🐱 Niko 的回应</div>
+          <div class="responses-card" id="responses-card"></div>
+        </div>
+
+        <!-- 仅历史日期显示的提示 -->
+        <div class="lane-section hidden" id="lane2-history-notice">
+          <div class="history-notice">
+            🔒 这是 <span id="history-date-label"></span> 的历史记录，只读模式
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ========== 牌面详情弹窗 ========== -->
+  <div class="modal-overlay hidden" id="modal-card-detail">
+    <div class="modal-content">
+      <button class="modal-close" id="modal-close-detail">✕</button>
+      <img id="modal-card-img" class="modal-card-img" src="" alt="">
+      <div class="modal-card-name" id="modal-card-name"></div>
+      <div class="modal-card-slot" id="modal-card-slot"></div>
+      <div class="modal-card-position" id="modal-card-position"></div>
+      <div class="modal-card-keywords" id="modal-card-keywords"></div>
+      <div class="modal-card-general" id="modal-card-general"></div>
+      <div class="modal-section-title">👔 穿衣</div>
+      <div class="modal-domain-row" id="modal-domain-clothing"></div>
+      <div class="modal-section-title">🍜 饮食</div>
+      <div class="modal-domain-row" id="modal-domain-food"></div>
+      <div class="modal-section-title">🏠 居家</div>
+      <div class="modal-domain-row" id="modal-domain-living"></div>
+      <div class="modal-section-title">🚶 出行</div>
+      <div class="modal-domain-row" id="modal-domain-transport"></div>
+    </div>
+  </div>
+
+  <!-- ========== 图鉴收集墙弹窗 ========== -->
+  <div class="modal-overlay hidden" id="modal-collection">
+    <div class="modal-content modal-collection-content">
+      <button class="modal-close" id="modal-close-collection">✕</button>
+      <div class="collection-header">
+        <h2>📚 塔罗图鉴</h2>
+        <span class="collection-count" id="collection-count">已收集：0 / 22</span>
+        <div class="collection-full-bar">
+          <div class="collection-full-fill" id="collection-full-fill" style="width:0%"></div>
+        </div>
+        <div class="collection-milestone" id="collection-milestone"></div>
+      </div>
+      <div class="collection-grid" id="collection-grid"></div>
+    </div>
+  </div>
+
+  <!-- ========== 设置弹窗 ========== -->
+  <div class="modal-overlay hidden" id="modal-config">
+    <div class="modal-content modal-config-content">
+      <button class="modal-close" id="modal-close-config">✕</button>
+      <h2>⚙️ 设置</h2>
+      <div class="config-form">
+        <div class="config-actions">
+          <button class="btn btn-secondary btn-sm" id="btn-export-data">📤 导出全部数据</button>
+          <button class="btn btn-ghost btn-sm btn-danger" id="btn-reset-data">⚠️ 重置所有数据</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JS Modules -->
+  <script src="js/tarotData.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/tarotEngine.js"></script>
+  <script src="js/nikoDialogues.js"></script>
+  <script src="js/aiService.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
