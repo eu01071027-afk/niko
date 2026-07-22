@@ -279,5 +279,82 @@ var AIService = {
         updateNikoState({ lastWeekReviewDate: getTodayDate() });
         return NikoDialogue.weeklyReviewFallback(weekData);
       });
+  },
+
+  // ---- Free Chat ----
+  chat: function(userMessage, contextMessages) {
+    var config = getAppConfig();
+    var _this = this;
+
+    if (!config.useAI || !config.apiKey) {
+      return Promise.resolve(this._getFallbackChatReply(userMessage));
+    }
+
+    var memorySummary = getMemorySummary();
+    var behaviorMemory = buildBehaviorMemory();
+    var mood = getTodayMood();
+    var state = getNikoState();
+
+    var weatherCtx = '';
+    try { weatherCtx = WeatherService.getWeatherContext(WeatherService._cacheKey ? storageGet('niko_weatherCache', null) : null); } catch(e) {}
+    if (!weatherCtx && typeof storageGet('niko_weatherCache') !== 'undefined') {
+      var w = storageGet('niko_weatherCache', null);
+      if (w) weatherCtx = WeatherService.getWeatherContext(w);
+    }
+
+    var systemPrompt = this.SYSTEM_PROMPT +
+      '\n\n当前日期：' + getTodayDate() +
+      '\n好感度：' + state.affection + '/100，连续活跃' + state.consecutiveActiveDays + '天' +
+      (weatherCtx ? '\n' + weatherCtx : '') +
+      '\n用户7天行为记录：' + behaviorMemory +
+      (mood ? '\n用户今日心情：' + mood.mood : '') +
+      (memorySummary ? '\n近期记忆摘要：' + memorySummary : '') +
+      '\n\n你现在在和用户进行自由聊天。保持傲娇性格——关心必须包装在吐槽里，夸奖一定带但是。' +
+      '回复要简短自然（1-3句话），像真正的即时通讯聊天。可以用猫的行为做比喻。被戳穿时炸毛。' +
+      '\n\n你的输出就是直接的聊天回复文本，不需要JSON格式，不需要任何包装。';
+
+    var messages = [{ role: 'system', content: systemPrompt }];
+    if (contextMessages && contextMessages.length > 0) {
+      for (var i = 0; i < contextMessages.length; i++) {
+        messages.push(contextMessages[i]);
+      }
+    }
+    messages.push({ role: 'user', content: userMessage });
+
+    var body = {
+      model: config.model || 'deepseek-chat',
+      messages: messages,
+      max_tokens: 400,
+      temperature: 1.0
+    };
+
+    return new Promise(function(resolve, reject) {
+      var controller = new AbortController();
+      var timeout = setTimeout(function() { controller.abort(); reject(new Error('timeout')); }, 30000);
+
+      fetch(config.apiEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + config.apiKey },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      })
+      .then(function(r) { clearTimeout(timeout); return r.json(); })
+      .then(function(data) {
+        var text = data.choices[0].message.content.trim();
+        resolve(text);
+      })
+      .catch(function(err) { clearTimeout(timeout); resolve(_this._getFallbackChatReply(userMessage)); });
+    });
+  },
+
+  _getFallbackChatReply: function(msg) {
+    var replies = [
+      '哼，我现在不太想说话。…但你说吧，我听着。',
+      '嗯。听到了。',
+      '…（耳朵动了动）你说得对。',
+      '这个问题嘛…我只是一只猫，不是百科全书。但我觉得你说得有点道理。',
+      '哼，随便你怎么想。…不过你说的话我会记着的。'
+    ];
+    return replies[Math.floor(Math.random() * replies.length)];
   }
 };
