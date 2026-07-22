@@ -8,24 +8,6 @@
 </head>
 <body>
 
-  <!-- ========== 邀请码门禁 ========== -->
-  <div id="invite-gate" class="invite-gate">
-    <div class="invite-gate-bg"></div>
-    <div class="invite-gate-card">
-      <img src="images/niko-portrait.jpg" alt="Niko" class="invite-niko-img">
-      <h1 class="invite-title">✦ NIKO ✦</h1>
-      <p class="invite-subtitle">傲娇黑猫的每日塔罗</p>
-      <div class="invite-divider"></div>
-      <p class="invite-hint">输入邀请码以进入</p>
-      <div class="invite-input-row">
-        <input type="text" id="invite-input" class="invite-input"
-               placeholder="XXXX-XXXX" maxlength="9" autocomplete="off">
-        <button class="btn btn-primary" id="btn-invite-submit">进入</button>
-      </div>
-      <p class="invite-error hidden" id="invite-error">邀请码无效，再试试？</p>
-    </div>
-  </div>
-
   <!-- ========== 扇形抽牌浮层 ========== -->
   <div id="draw-overlay" class="draw-overlay hidden">
     <div class="draw-overlay-bg"></div>
@@ -55,6 +37,10 @@
     <header class="top-bar">
       <div class="top-bar-left">
         <span class="top-bar-brand">✦ NIKO ✦</span>
+        <nav class="top-bar-nav">
+          <button class="nav-tab active" id="nav-tarot">🔮 塔罗</button>
+          <button class="nav-tab" id="nav-chat">💬 聊天</button>
+        </nav>
       </div>
       <div class="top-bar-center" id="top-bar-niko" title="点击戳戳 Niko">
         <img class="niko-portrait" src="images/niko-portrait.jpg" alt="Niko" id="niko-portrait-img">
@@ -68,6 +54,7 @@
           </div>
           <span class="affection-value" id="affection-value">0</span>
         </div>
+        <button class="btn-icon" id="btn-milestones" title="记忆之书">📖</button>
         <button class="btn-icon" id="btn-export" title="导出数据">📤</button>
         <button class="btn-icon" id="btn-config" title="设置">⚙️</button>
       </div>
@@ -101,7 +88,7 @@
         <div class="lane-section" id="lane1-collection-section">
           <div class="section-title">📚 塔罗图鉴</div>
           <div class="collection-summary" id="collection-summary">
-            <span class="collection-progress-text" id="collection-progress-text">已收集：0 / 22</span>
+            <span class="collection-progress-text" id="collection-progress-text">已收集：0 / 78</span>
             <div class="collection-mini-bar">
               <div class="collection-mini-fill" id="collection-mini-fill" style="width:0%"></div>
             </div>
@@ -166,6 +153,59 @@
     </div>
   </div>
 
+  <!-- ========== Niko 聊天 & 心情页面 ========== -->
+  <div id="chat-view" class="chat-view hidden">
+    <div class="chat-main">
+      <!-- 聊天头部 -->
+      <div class="chat-header">
+        <img class="niko-portrait" src="images/niko-portrait.jpg" alt="Niko">
+        <div class="chat-header-info">
+          <span class="chat-header-name">Niko</span>
+          <span class="chat-header-status" id="chat-header-status">在线 · 傲娇中</span>
+        </div>
+        <div class="chat-header-actions">
+          <button class="btn-icon" id="btn-chat-challenge" title="挑战任务">🎯</button>
+          <button class="btn-icon" id="btn-chat-mood" title="记录心情">💭</button>
+        </div>
+      </div>
+
+      <!-- 消息列表 -->
+      <div class="chat-messages" id="chat-messages">
+        <div class="chat-date-divider"><span id="chat-date-label">今天</span></div>
+        <div id="chat-greeting-area"></div>
+      </div>
+
+      <!-- 心情选择器（弹出） -->
+      <div class="mood-picker hidden" id="mood-picker">
+        <span class="mood-label">今天感觉如何？</span>
+        <div class="mood-options" id="mood-options">
+          <button class="mood-btn" data-mood="happy">😊<span>开心</span></button>
+          <button class="mood-btn" data-mood="calm">😌<span>平静</span></button>
+          <button class="mood-btn" data-mood="tired">😮‍💨<span>疲惫</span></button>
+          <button class="mood-btn" data-mood="anxious">😰<span>焦虑</span></button>
+          <button class="mood-btn" data-mood="sad">😢<span>难过</span></button>
+          <button class="mood-btn" data-mood="excited">🤩<span>兴奋</span></button>
+        </div>
+      </div>
+
+      <!-- 挑战面板 -->
+      <div class="challenge-panel hidden" id="challenge-panel">
+        <div class="challenge-panel-header">
+          <span>🎯 Niko 的挑战</span>
+          <button class="btn-icon" id="btn-close-challenge">✕</button>
+        </div>
+        <div class="challenge-list" id="challenge-list"></div>
+      </div>
+
+      <!-- 输入区 -->
+      <div class="chat-input-area">
+        <input type="text" class="chat-input" id="chat-input"
+               placeholder="和 Niko 说点什么…" autocomplete="off">
+        <button class="btn btn-primary btn-sm" id="btn-chat-send">发送</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ========== 牌面详情弹窗 ========== -->
   <div class="modal-overlay hidden" id="modal-card-detail">
     <div class="modal-content">
@@ -176,14 +216,7 @@
       <div class="modal-card-position" id="modal-card-position"></div>
       <div class="modal-card-keywords" id="modal-card-keywords"></div>
       <div class="modal-card-general" id="modal-card-general"></div>
-      <div class="modal-section-title">👔 穿衣</div>
-      <div class="modal-domain-row" id="modal-domain-clothing"></div>
-      <div class="modal-section-title">🍜 饮食</div>
-      <div class="modal-domain-row" id="modal-domain-food"></div>
-      <div class="modal-section-title">🏠 居家</div>
-      <div class="modal-domain-row" id="modal-domain-living"></div>
-      <div class="modal-section-title">🚶 出行</div>
-      <div class="modal-domain-row" id="modal-domain-transport"></div>
+      <div class="modal-niko-comment" id="modal-niko-comment"></div>
     </div>
   </div>
 
@@ -193,7 +226,7 @@
       <button class="modal-close" id="modal-close-collection">✕</button>
       <div class="collection-header">
         <h2>📚 塔罗图鉴</h2>
-        <span class="collection-count" id="collection-count">已收集：0 / 22</span>
+        <span class="collection-count" id="collection-count">已收集：0 / 78</span>
         <div class="collection-full-bar">
           <div class="collection-full-fill" id="collection-full-fill" style="width:0%"></div>
         </div>
@@ -217,11 +250,26 @@
     </div>
   </div>
 
+  <!-- ========== 里程碑记忆书 ========== -->
+  <div class="modal-overlay hidden" id="modal-milestones">
+    <div class="modal-content modal-milestones-content">
+      <button class="modal-close" id="modal-close-milestones">✕</button>
+      <div class="milestones-header">
+        <img src="images/niko-portrait.jpg" alt="Niko" class="milestones-niko-img">
+        <h2>📖 记忆之书</h2>
+        <p class="milestones-sub">你和 Niko 一起走过的路</p>
+      </div>
+      <div class="milestones-stats" id="milestones-stats"></div>
+      <div class="milestones-timeline" id="milestones-timeline"></div>
+    </div>
+  </div>
+
   <!-- JS Modules -->
   <script src="js/tarotData.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/tarotEngine.js"></script>
   <script src="js/nikoDialogues.js"></script>
+  <script src="js/weatherService.js"></script>
   <script src="js/aiService.js"></script>
   <script src="js/app.js"></script>
 </body>
