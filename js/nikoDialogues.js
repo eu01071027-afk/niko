@@ -32,8 +32,8 @@ var TSUNDERE_SUFFIXES = [
 
 // ---- 首次启动 ----
 var FIRST_TIME_GREETINGS = [
-  '…哦？来了个新面孔。\n我叫 Niko。如你所见，是一只会塔罗占卜的黑猫。\n不知道为什么，命运让我来这里陪你…\n别误会！这不是我自己选的。只是命运的安排而已。\n…总之，以后每天我都会帮你看看运势。你爱信不信。',
-  '…哼，又多了一个需要照顾的人类。\n我是 Niko，会塔罗占卜的黑猫。\n别问为什么我会说话，这不是重点。\n重点是——从今天起，我每天都会帮你抽三张牌看看运势。\n…当然，我才不是关心你。只是尽一只占卜猫的本分罢了。'
+  '…哦？来了个新面孔。\n\n我叫 Niko。如你所见，是一只黑猫——穿深紫色小斗篷，脖子上挂月亮石。不是普通的猫，我能看见命运的丝线。塔罗占卜是我的事。\n\n不知道为什么，命运让我在这里遇见你。\n别误会！这不是我自己选的。只是丝线牵引的方向刚好指向你而已。我对你这个人完全没有兴趣。\n\n…不过既然来了，我就勉为其难地当你的占卜师吧。每天帮你看看运势，提醒你该做什么不该做什么。不是关心你——是牌需要被翻开，命运需要被阅读。而你刚好在这。\n\n从今天起，每天零点过后你都可以来找我抽三张牌。牌会告诉你今天的运势，吃什么穿什么走哪条路。\n\n…要是你听了牌的建议，记得回来告诉我。我才不是想知道你今天做了什么——只是确认一下牌说得准不准。\n\n好了。从牌堆里选三张吧。别想太多，凭直觉。命运会帮你挑对的——只要你相信。',
+  '…哼，又多了一个需要照顾的人类。\n\n我是 Niko。黑猫，塔罗占卜师。这件紫色斗篷不是装饰——它帮我感知命运之丝的流动。脖子上这颗月亮石是我唯一在乎的东西…除了塔罗牌。\n\n我也不知道为什么我会说话、会占卜、会在今天遇到你。命运的丝线从来不解释自己——它只负责牵引。既然它把你带到了我面前，那就说明你需要我。\n\n…说"需要"可能太过了。你需要的是塔罗牌，不是我。我只是刚好会解牌而已。\n\n以后每个零点过后你都能来抽一次。三张牌——过去、现在、未来——或者说心境、挑战、指引。牌会告诉你今天怎么过。至于你听不听…那是你的事。不过最好还是听一下。\n\n如果你照做了，回来告诉我。如果你没做…也回来告诉我。我要知道哪些牌被你辜负了。\n\n好了。选三张吧。'
 ];
 
 // ---- 每日问候（未抽牌） ----
@@ -152,11 +152,11 @@ var LOADING_PHRASES = [
 
 // ---- 图鉴收集里程碑 ----
 function getCollectionMilestoneText(count) {
-  if (count === 22) return '你…居然把二十二张都收集齐了。这意味着我已经没有任何秘密可以对你隐瞒了。…笨蛋，你以为我会说这种话吗！…不过，确实都齐了。谢谢你。';
-  if (count >= 18) return '还差几张就齐了…我不是在鼓励你，只是陈述事实。';
-  if (count >= 14) return '收集过半了…看来你不是三分钟热度。…嗯，还不错。';
-  if (count >= 8) return '不知不觉收集了不少…我才没有在帮你数。';
-  if (count >= 4) return '刚开始收集呢…慢慢来，反正我哪儿也不去。';
+  if (count === 78) return '你…居然把七十八张都收集齐了。这意味着我已经没有任何秘密可以对你隐瞒了。…笨蛋，你以为我会说这种话吗！…不过，确实都齐了。谢谢你。';
+  if (count >= 70) return '还差几张就齐了…我不是在鼓励你，只是陈述事实。';
+  if (count >= 50) return '收集过半了…看来你不是三分钟热度。…嗯，还不错。';
+  if (count >= 30) return '不知不觉收集了不少…我才没有在帮你数。';
+  if (count >= 10) return '刚开始收集呢…慢慢来，反正我哪儿也不去。';
   return '';
 }
 
@@ -289,6 +289,46 @@ var NikoDialogue = {
     return LOADING_PHRASES[Math.floor(Math.random() * LOADING_PHRASES.length)];
   },
 
+  cardDetailedComment: function(card, position) {
+    var isUp = position === 'upright';
+    var name = card.name;
+    var comments = isUp
+      ? [
+          '哼，「' + name + '」正位…运势还不错。不过你别得意，牌好不代表你可以偷懒。命运只是给了你顺风，帆还是要你自己拉的。',
+          '"' + name + '"正位啊…好吧，这张牌确实不错。但占卜只是告诉你风向，船怎么开是你的事。我才不是在关心你。',
+          '嗯…「' + name + '」正位。看来命运今天对你还行。不过好运如果不用来行动就等于浪费——你懂我意思吧？'
+        ]
+      : [
+          '「' + name + '」逆位…别紧张，逆位不代表坏事，只是提醒你换个方向。牌的逆位是路标，不是判决书。',
+          '哼，逆位的"' + name + '"…这说明什么？说明你需要调整了。不过调整而已，又不是世界末日。我能看到命运的丝线——它还没断。',
+          '逆位的「' + name + '」…好吧，今天确实有些需要注意的地方。但你知道吗？逆位的牌有时候比正位更诚实。因为它告诉你要小心什么。'
+        ];
+    var idx = (card.id || '').length + Math.abs(card.name.length || 0);
+    return comments[idx % comments.length];
+  },
+
+  cardDomainComment: function(domainKey, card, position) {
+    var isUp = position === 'upright';
+    var comments = {
+      clothing: isUp
+        ? ['（穿就对了，我的牌不会骗你）','（别说我没提醒你搭配这事）','（信牌的话，今天就这么穿）']
+        : ['（…但也不是不能穿，看你自己）','（牌说慎重，但最终是你自己的事）','（我的建议仅供参考，哼）'],
+      food: isUp
+        ? ['（胃是不会说谎的，听牌的）','（今天这个方向吃东西准没错）','（牌都说了，还犹豫什么）']
+        : ['（当然你非要吃别的我也拦不住）','（牌这么说，但你的胃你说了算）','（反正我说了你也不一定听…）'],
+      living: isUp
+        ? ['（收拾一下心情会变好，真的）','（牌的建议是认真的，偶尔听一次）','（照做的话…我会稍微佩服你一下）']
+        : ['（懒一天也没什么，明天再说）','（牌这么说，但不勉强）','（你爱怎样怎样…但稍微考虑一下？）'],
+      transport: isUp
+        ? ['（出门走走，运气在路上等你）','（别宅了，命运不会自己找上门）','（走运走运，不走哪来的运）']
+        : ['（不想出门就待着，牌不会怪你）','（但老窝着也不是办法…随你）','（今天不出门也行，安全第一）']
+    };
+    var pool = comments[domainKey] || ['（…哼）'];
+    // Deterministic-ish pick based on card id
+    var idx = (card.id || '').length + (isUp ? 0 : 3);
+    return pool[idx % pool.length];
+  },
+
   collectionMilestone: function(count) {
     return getCollectionMilestoneText(count);
   },
@@ -337,5 +377,88 @@ var NikoDialogue = {
       soft: '😽'
     };
     return emojis[mood] || '😼';
+  },
+
+  // ---- Time-aware greeting (主动问候) ----
+  proactiveGreeting: function() {
+    var hour = new Date().getHours();
+    var timeWord = hour < 6 ? '凌晨' : hour < 9 ? '早上' : hour < 12 ? '上午' : hour < 14 ? '中午' : hour < 18 ? '下午' : hour < 22 ? '晚上' : '深夜';
+    var state = getNikoState();
+    var days = state.consecutiveActiveDays;
+    var yesterdayBehavior = getBehaviorByDate(getYesterdayDate());
+
+    // Memory of yesterday
+    var memoryLine = '';
+    if (yesterdayBehavior && yesterdayBehavior.submittedAt) {
+      var notes = [];
+      for (var key in yesterdayBehavior.domains) {
+        if (yesterdayBehavior.domains[key] && yesterdayBehavior.domains[key].note) {
+          notes.push(yesterdayBehavior.domains[key].note);
+        }
+      }
+      if (notes.length > 0) {
+        memoryLine = '昨天你说' + notes[0].slice(0, 15) + '…嗯，我记着呢。';
+      }
+    }
+
+    // Gap detection
+    var lastDate = state.lastInteractionDate;
+    var today = getTodayDate();
+    if (lastDate && lastDate !== today) {
+      var last = new Date(lastDate + 'T00:00:00');
+      var now = new Date(today + 'T00:00:00');
+      var gap = Math.floor((now - last) / (1000 * 60 * 60 * 24));
+      if (gap >= 3) {
+        return gap + '天了。我可没有在数…只是刚好记得而已。' + timeWord + '好，要抽牌吗？';
+      }
+      if (gap >= 2) {
+        return '昨天没来呢…算啦，' + timeWord + '好。今天要抽牌吗？';
+      }
+    }
+
+    // Regular time-aware
+    var greetings = {
+      '凌晨': ['这个点了还不睡…算了，我也没资格说你，猫也是夜行动物。', '凌晨了…你失眠？…坐吧，我陪你。'],
+      '早上': ['早。我还没完全醒…但牌随时可以抽。', '早上好。今天天气看起来不错…我是说，适合抽牌。'],
+      '上午': ['上午好。咖啡喝了吗？…我问这个干嘛，你爱喝不喝。', '哼，今天来得挺早。'],
+      '中午': ['中午了，吃饭了吗？…不是关心你，只是空腹抽牌运势会不准。', '中午好。今天的牌正在晒月亮…开玩笑的，牌不需要晒太阳也不需要晒月亮。'],
+      '下午': ['下午了…你今天看起来还行。我是说，比昨天好一点。', '下午好。午后的光线最适合看牌了…来吧？'],
+      '晚上': ['晚上好。今天过得怎么样？…算了你不用回答，牌会告诉我的。', '晚上好。今天最后一件事——抽牌。然后你就可以去休息了。'],
+      '深夜': ['这么晚了还来找我…你这个人真是的。算了，深夜的占卜最准了。', '深夜了。这个时候抽到的牌最诚实…你准备好了吗？']
+    };
+
+    var pool = greetings[timeWord] || greetings['晚上'];
+    var greeting = pool[Math.floor(Math.random() * pool.length)];
+
+    if (days >= 7) greeting = greeting + ' 连续第' + days + '天了…哼。';
+    if (memoryLine) greeting = memoryLine + ' ' + greeting;
+
+    return greeting;
+  },
+
+  // ---- Chat welcome (聊天页首次进入) ----
+  chatWelcome: function() {
+    var hour = new Date().getHours();
+    var timeWord = hour < 6 ? '凌晨' : hour < 9 ? '早上' : hour < 12 ? '上午' : hour < 14 ? '中午' : hour < 18 ? '下午' : hour < 22 ? '晚上' : '深夜';
+    var welcomes = [
+      timeWord + '好。这里是聊天室…我是说，如果你想跟我说点什么的话。不是我想聊，只是这里刚好有个输入框。',
+      '哼，你来了。' + timeWord + '了…有什么事就说吧。我听着呢。',
+      timeWord + '好。今天的塔罗已经看过了，不过如果你想随便聊聊…也不是不行。'
+    ];
+    return welcomes[Math.floor(Math.random() * welcomes.length)];
+  },
+
+  // ---- Mood response ----
+  moodResponse: function(mood) {
+    var responses = {
+      happy: ['开心啊…那就好。继续保持，别得意忘形就行。', '哼，开心就好。不过开心的时候容易忽略细节——牌是这么说的。'],
+      calm: ['平静是好事。不过太平静了小心睡着…我开玩笑的。', '嗯，平静。今天的运势也会平稳度过。'],
+      tired: ['累了就休息。没有人会怪你…除了你自己。需要我讲个猫的故事吗？', '疲惫的时候别硬撑。我也经常睡一整天…猫的智慧。'],
+      anxious: ['焦虑啊…过来。深呼吸。虽然我只是一只猫，但占卜师告诉你：一切都会好的。', '焦虑的时候看什么都模糊。但命运的丝线还在——它没有断。'],
+      sad: ['…过来。我不会说安慰的话。但我会在这里。…（尾巴轻轻搭在你手上）', '难过的时候就难过吧。不需要假装开心。牌在，我也在。'],
+      excited: ['这么兴奋？看来今天有好事。…分享一下？我才不是好奇。', '兴奋的时候运势最准——因为你的能量在流动。来吧，做点什么！']
+    };
+    var pool = responses[mood] || responses['calm'];
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 };
