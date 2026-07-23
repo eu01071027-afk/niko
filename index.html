@@ -11,7 +11,7 @@
   <!-- ========== 扇形抽牌浮层 ========== -->
   <div id="draw-overlay" class="draw-overlay hidden">
     <div class="draw-overlay-bg"></div>
-    <div class="draw-overlay-content">
+    <div class="draw-overlay-content" id="draw-overlay-content">
       <!-- Niko 对话区 -->
       <div class="draw-chat" id="draw-chat"></div>
       <!-- 扇形牌堆 -->
@@ -43,7 +43,7 @@
         </nav>
       </div>
       <div class="top-bar-center" id="top-bar-niko" title="点击戳戳 Niko">
-        <img class="niko-portrait" src="images/niko-portrait.jpg" alt="Niko" id="niko-portrait-img">
+        <img class="niko-portrait" src="images/niko-portrait.svg" alt="Niko" id="niko-portrait-img">
         <span class="top-bar-niko-name">Niko</span>
       </div>
       <div class="top-bar-right">
@@ -155,16 +155,26 @@
 
   <!-- ========== Niko 聊天 & 心情页面 ========== -->
   <div id="chat-view" class="chat-view hidden">
+    <!-- Niko 背景立绘 -->
+    <div class="chat-niko-bg" id="chat-niko-bg">
+      <img src="images/niko-portrait.svg" alt="Niko" class="chat-niko-bg-img">
+    </div>
     <div class="chat-main">
       <!-- 聊天头部 -->
       <div class="chat-header">
-        <img class="niko-portrait" src="images/niko-portrait.jpg" alt="Niko">
+        <img class="niko-portrait" src="images/niko-portrait.svg" alt="Niko">
         <div class="chat-header-info">
           <span class="chat-header-name">Niko</span>
           <span class="chat-header-status" id="chat-header-status">在线 · 傲娇中</span>
         </div>
         <div class="chat-header-actions">
-          <button class="btn-icon" id="btn-chat-challenge" title="挑战任务">🎯</button>
+          <button class="btn-icon" id="btn-chat-dim" title="调整背景亮度">💡</button>
+          <div class="chat-dim-slider hidden" id="chat-dim-slider">
+            <span class="chat-dim-slider-label">背景</span>
+            <input type="range" id="chat-dim-range" min="20" max="55" value="45">
+            <span class="chat-dim-slider-label" id="chat-dim-val">45%</span>
+          </div>
+          <button class="btn-icon" id="btn-chat-challenge" title="陪伴模式">⏳</button>
           <button class="btn-icon" id="btn-chat-mood" title="记录心情">💭</button>
         </div>
       </div>
@@ -197,6 +207,58 @@
         <div class="challenge-list" id="challenge-list"></div>
       </div>
 
+      <!-- 陪伴模式面板 -->
+      <div class="companion-panel hidden" id="companion-panel">
+        <div class="companion-header">
+          <span>⏳ Niko 陪你专注</span>
+          <button class="btn-icon" id="btn-close-companion">✕</button>
+        </div>
+        <div class="companion-durations" id="companion-durations">
+          <button class="companion-preset active" data-min="25">25 分钟</button>
+          <button class="companion-preset" data-min="45">45 分钟</button>
+          <button class="companion-preset" data-min="60">60 分钟</button>
+          <div class="companion-pickers" id="companion-pickers" style="display:none;align-items:center;gap:8px;">
+            <div class="scroll-picker" id="comp-hour-picker">
+              <div class="scroll-picker-btn up">▲</div>
+              <div class="scroll-picker-value" data-value="0">00</div>
+              <div class="scroll-picker-btn down">▼</div>
+              <div class="scroll-picker-label">时</div>
+            </div>
+            <div class="scroll-picker" id="comp-min-picker">
+              <div class="scroll-picker-btn up">▲</div>
+              <div class="scroll-picker-value" data-value="25">25</div>
+              <div class="scroll-picker-btn down">▼</div>
+              <div class="scroll-picker-label">分</div>
+            </div>
+          </div>
+        </div>
+        <div class="companion-categories" id="companion-categories">
+          <button class="companion-cat active" data-cat="学习">📚 学习</button>
+          <button class="companion-cat" data-cat="工作">💻 工作</button>
+          <button class="companion-cat" data-cat="创作">✍️ 创作</button>
+          <button class="companion-cat" data-cat="其他">🧘 其他</button>
+        </div>
+        <!-- 未开始时 -->
+        <div class="companion-start-area" id="companion-start-area">
+          <button class="btn btn-primary" id="btn-start-companion">▶ 开始专注</button>
+        </div>
+        <!-- 进行中 -->
+        <div class="companion-active-area hidden" id="companion-active-area">
+          <div class="companion-hourglass" id="companion-hourglass">
+            <svg viewBox="0 0 48 72" width="48" height="72">
+              <path d="M8 4h32v16c0 10-8 16-8 16s8 6 8 16v16H8V52c0-10 8-16 8-16s-8-6-8-16V4z" fill="none" stroke="currentColor" stroke-width="2.5"/>
+              <line x1="4" y1="4" x2="44" y2="4" stroke="currentColor" stroke-width="3"/>
+              <line x1="4" y1="68" x2="44" y2="68" stroke="currentColor" stroke-width="3"/>
+              <rect x="22" y="32" width="4" height="8" rx="2" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="companion-countdown" id="companion-countdown">25:00</div>
+          <div class="companion-cat-label" id="companion-cat-label">学习中…</div>
+          <div class="companion-niko-line" id="companion-niko-line">我在看着呢…别偷懒。</div>
+          <button class="btn btn-ghost btn-sm" id="btn-stop-companion">提前结束</button>
+        </div>
+      </div>
+
       <!-- 输入区 -->
       <div class="chat-input-area">
         <input type="text" class="chat-input" id="chat-input"
@@ -205,6 +267,45 @@
       </div>
     </div>
   </div>
+
+  <!-- ========== 长期任务面板（右侧滑出） ========== -->
+  <div id="tasks-panel" class="tasks-panel hidden">
+    <div class="tasks-panel-header">
+      <span>📋 任务监督</span>
+      <button class="btn-icon" id="btn-close-tasks">✕</button>
+    </div>
+    <div class="tasks-intro" id="tasks-intro">
+      <img src="images/niko-portrait.svg" class="tasks-intro-avatar" alt="Niko">
+      <div class="tasks-intro-text">这里可以设长期任务——告诉我你要做什么、做几天，每天来签个到。我会盯着进度的。</div>
+    </div>
+    <div class="tasks-niko-msg" id="tasks-niko-msg"></div>
+    <div class="tasks-list" id="tasks-list"></div>
+    <div class="tasks-add-area">
+      <button class="btn btn-primary btn-sm" id="btn-show-task-create">＋ 新建任务</button>
+    </div>
+    <!-- Task creation overlay (hidden by default) -->
+    <div class="task-create-overlay hidden" id="task-create-overlay">
+      <div class="task-create-card">
+        <h3>📋 新建任务</h3>
+        <input type="text" class="task-create-input" id="task-create-input" placeholder="任务名称…">
+        <div class="task-create-picker-row">
+          <span style="font-size:13px;color:var(--text3)">需要</span>
+          <div class="scroll-picker" id="task-days-picker">
+            <div class="scroll-picker-btn up">▲</div>
+            <div class="scroll-picker-value" data-value="3">3</div>
+            <div class="scroll-picker-btn down">▼</div>
+          </div>
+          <span style="font-size:13px;color:var(--text3)">天完成</span>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-ghost btn-sm" id="btn-cancel-task-create">取消</button>
+          <button class="btn btn-primary btn-sm" id="btn-confirm-task-create">创建</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- 打开任务面板的按钮 -->
+  <button class="tasks-trigger" id="btn-open-tasks" title="任务监督">📋</button>
 
   <!-- ========== 牌面详情弹窗 ========== -->
   <div class="modal-overlay hidden" id="modal-card-detail">
@@ -243,7 +344,9 @@
       <h2>⚙️ 设置</h2>
       <div class="config-form">
         <div class="config-actions">
-          <button class="btn btn-secondary btn-sm" id="btn-export-data">📤 导出全部数据</button>
+          <button class="btn btn-secondary btn-sm" id="btn-export-data">📤 导出备份</button>
+          <button class="btn btn-secondary btn-sm" id="btn-import-data">📥 导入备份</button>
+          <input type="file" id="import-file-input" accept=".json" style="display:none">
           <button class="btn btn-ghost btn-sm btn-danger" id="btn-reset-data">⚠️ 重置所有数据</button>
         </div>
       </div>
@@ -255,7 +358,7 @@
     <div class="modal-content modal-milestones-content">
       <button class="modal-close" id="modal-close-milestones">✕</button>
       <div class="milestones-header">
-        <img src="images/niko-portrait.jpg" alt="Niko" class="milestones-niko-img">
+        <img src="images/niko-portrait.svg" alt="Niko" class="milestones-niko-img">
         <h2>📖 记忆之书</h2>
         <p class="milestones-sub">你和 Niko 一起走过的路</p>
       </div>
