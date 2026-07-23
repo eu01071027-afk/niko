@@ -71,14 +71,15 @@ var WeatherService = {
       });
     }
 
-    // Method 2: IP-based fallback
+    // Method 2: IP-based fallback (multiple services)
     function tryIP(idx) {
       var sources = [
-        { url: 'https://api.ip.sb/geoip', parse: function(d) { return { city: d.city || '', lat: d.latitude || 35, lon: d.longitude || 105 }; } }
+        { url: 'https://api.ip.sb/geoip', parse: function(d) { return { city: d.city || d.region || '', lat: d.latitude || 35, lon: d.longitude || 105 }; } },
+        { url: 'https://ipapi.co/json/', parse: function(d) { return { city: d.city || d.region || '', lat: d.latitude || 35, lon: d.longitude || 105 }; } }
       ];
       if (idx >= sources.length) return Promise.resolve({ city: '', lat: 35, lon: 105 });
       var src = sources[idx];
-      return fetch(src.url, { signal: AbortSignal.timeout(4000) })
+      return fetch(src.url, { signal: AbortSignal.timeout(5000) })
         .then(function(r) { return r.json(); })
         .then(function(d) { return src.parse(d); })
         .catch(function() { return tryIP(idx + 1); });
