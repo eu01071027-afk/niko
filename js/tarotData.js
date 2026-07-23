@@ -590,16 +590,16 @@ const SPREAD_POSITIONS = [
 const DOMAINS = [
   { key: "clothing", label: "衣",
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2 4h4l-1 5-1 10H8L7 11 6 6h4l2-4z"/><path d="M9 6h6"/></svg>',
-    question: "今天穿了什么？" },
+    question: "穿了什么？别跟我说又是一件随便抓的T恤…" },
   { key: "food", label: "食",
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 010 8h-1"/><ellipse cx="10" cy="12" rx="6" ry="6"/><path d="M7 3v18"/></svg>',
-    question: "今天吃了什么？" },
+    question: "今天吃了什么？有没有好好吃饭…我才不是关心你的胃。" },
   { key: "living", label: "住",
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg>',
-    question: "今天在家做了什么？" },
+    question: "在家做了什么？收拾房间也算…别懒着不动。" },
   { key: "transport", label: "行",
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6" r="2"/><path d="M6 16c-2 0-3 2-3 4h18c0-2-1-4-3-4"/><path d="M9 12l-3 4"/><path d="M15 12l3 4"/></svg>',
-    question: "今天去了哪里？" }
+    question: "今天去了哪里？走运走运，不走出去哪来的运。" }
 ];
 
 // ============================================================
