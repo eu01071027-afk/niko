@@ -53,18 +53,19 @@ var App = {
     var messagesEl = document.getElementById('chat-messages');
     var greetingArea = document.getElementById('chat-greeting-area');
 
-    // Welcome message
-    var welcome = NikoDialogue.chatWelcome();
-    greetingArea.innerHTML = '';
-    this._addChatMessage('niko', welcome);
-
-    // Load history if exists
+    // Load history if exists — if so, don't re-welcome
     var history = getChatHistory();
+    greetingArea.innerHTML = '';
     if (history.length > 0) {
-      var recent = history.slice(-20);
+      var recent = history.slice(-30);
       for (var i = 0; i < recent.length; i++) {
         this._addChatMessage(recent[i].role, recent[i].content, false);
       }
+    } else {
+      // First time today — welcome
+      var welcome = NikoDialogue.chatWelcome();
+      this._addChatMessage('niko', welcome);
+      addChatMessage('niko', welcome);
     }
 
     // Show mood picker if no mood recorded today
@@ -102,6 +103,7 @@ var App = {
     if (!text) return;
 
     input.value = '';
+    // First chat achievement
     this._addChatMessage('user', text);
     addChatMessage('user', text);
 
@@ -136,7 +138,7 @@ var App = {
 
     if (role === 'niko') {
       row.innerHTML =
-        '<div class="msg-avatar"><img src="images/niko-portrait.jpg" alt="Niko"></div>' +
+        '<div class="msg-avatar"><img src="images/niko-portrait.svg" alt="Niko"></div>' +
         '<div><div class="msg-bubble">' + content.replace(/\n/g, '<br>') + '</div></div>';
     } else {
       row.innerHTML =
@@ -154,8 +156,14 @@ var App = {
     for (var i = 0; i < moodBtns.length; i++) {
       moodBtns[i].addEventListener('click', function() {
         var mood = this.getAttribute('data-mood');
+        var moodLabels = { happy: '😊 今天很开心', calm: '😌 心情很平静', tired: '😮‍💨 有点疲惫', anxious: '😰 有些焦虑', sad: '😢 不太开心', excited: '🤩 超兴奋的' };
         setTodayMood(mood);
         document.getElementById('mood-picker').classList.add('hidden');
+        // Show user's mood as a message
+        var userMsg = moodLabels[mood] || ('今天的心情：' + mood);
+        _this._addChatMessage('user', userMsg);
+        addChatMessage('user', userMsg);
+        // Niko responds
         var response = NikoDialogue.moodResponse(mood);
         _this._addChatMessage('niko', response);
         addChatMessage('niko', response);
@@ -206,6 +214,247 @@ var App = {
         }
       });
     }
+  },
+
+  // ---- Companion Mode ----
+  _companionTimer: null,
+  _companionSeconds: 0,
+
+  _startCompanion: function() {
+    var _this = this;
+    var activePreset = document.querySelector('#companion-durations .companion-preset.active');
+    var mins;
+    if (activePreset && activePreset.textContent.indexOf('自定义') === -1) {
+      mins = parseInt(activePreset.getAttribute('data-min'));
+    } else {
+      var h = _this._hourPicker.get();
+      var m = _this._minPicker.get();
+      mins = h * 60 + m;
+    }
+    if (mins <= 0) return; // blocked — button should be disabled
+
+    // Lock chat UI + nav tabs during companion
+    document.querySelector('.chat-main').classList.add('locked');
+    document.body.classList.add('has-locked-companion');
+
+    var catActive = document.querySelector('#companion-categories .companion-cat.active');
+    var cat = catActive ? catActive.getAttribute('data-cat') : '专注';
+
+    this._companionSeconds = mins * 60;
+    document.getElementById('companion-start-area').classList.add('hidden');
+    document.getElementById('companion-active-area').classList.remove('hidden');
+    document.getElementById('companion-cat-label').textContent = cat + '中…';
+    document.getElementById('companion-niko-line').textContent = '我在看着呢…别偷懒。';
+
+    this._updateCountdown();
+    var _this = this;
+    this._companionTimer = setInterval(function() { _this._tickCompanion(); }, 1000);
+  },
+
+  _tickCompanion: function() {
+    this._companionSeconds--;
+    if (this._companionSeconds <= 0) {
+      this._stopCompanion(false);
+      this._dingSound();
+      // Companion message in panel only, not in chat
+      document.getElementById('companion-niko-line').textContent = '⏰ 时间到了…哼，你居然坚持下来了。还不错。';
+      return;
+    }
+    this._updateCountdown();
+    // Random Niko lines in panel
+    if (this._companionSeconds % 300 === 0 && this._companionSeconds > 60) {
+      var lines = ['…我还在。','别看我，看你的事。','加油…我什么都没说。','还剩' + Math.ceil(this._companionSeconds/60) + '分钟。'];
+      document.getElementById('companion-niko-line').textContent = lines[Math.floor(Math.random() * lines.length)];
+    }
+  },
+
+  _updateCountdown: function() {
+    var m = Math.floor(this._companionSeconds / 60);
+    var s = this._companionSeconds % 60;
+    document.getElementById('companion-countdown').textContent =
+      String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  },
+
+  _stopCompanion: function(cancelled) {
+    if (this._companionTimer) { clearInterval(this._companionTimer); this._companionTimer = null; }
+    document.querySelector('.chat-main').classList.remove('locked');
+    document.body.classList.remove('has-locked-companion');
+    document.getElementById('companion-active-area').classList.add('hidden');
+    document.getElementById('companion-start-area').classList.remove('hidden');
+    if (!cancelled) {
+      var affR = addAffection(2, 'companion');
+      if (affR.added > 0) {
+        this.renderTopBar();
+        this._showAffectionPopup(affR.added, '⏳');
+      }
+    }
+    if (cancelled) {
+      document.getElementById('companion-niko-line').textContent = '…行吧。下次别中途跑了。';
+    }
+    // Track session count
+    var sessions = storageGet('niko_companionSessions', 0);
+    sessions++;
+    storageSet('niko_companionSessions', sessions);
+    this._companionSeconds = 0;
+  },
+
+  _dingSound: function() {
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var o = ctx.createOscillator(); var g = ctx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(880, ctx.currentTime);
+      o.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+      g.gain.setValueAtTime(.3, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(.01, ctx.currentTime + .4);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime + .4);
+    } catch(e) {}
+  },
+
+  // ---- Long-term Tasks ----
+  _openTasksPanel: function() {
+    document.getElementById('tasks-panel').classList.remove('hidden');
+    this._renderTasks();
+  },
+
+  _renderTasks: function() {
+    var tasks = getTasks();
+    var list = document.getElementById('tasks-list');
+    var msg = document.getElementById('tasks-niko-msg');
+    var active = tasks.filter(function(t) { return !t.done; });
+
+    // Generate Niko's task message based on today's reading
+    msg.innerHTML = this._getTaskNikoMessage(active.length);
+    msg.style.fontStyle = 'normal';
+
+    list.innerHTML = '';
+    var _this = this;
+    for (var i = 0; i < tasks.length; i++) {
+      var t = tasks[i];
+      var checked = t.checkedDays.length;
+      var pct = Math.round(checked / t.days * 100);
+      var todayChecked = t.checkedDays.indexOf(getTodayDate()) !== -1;
+
+      var item = document.createElement('div');
+      item.className = 'task-item' + (t.done ? ' done' : '');
+      item.innerHTML =
+        '<div class="task-title">' +
+          '<div class="task-check' + (todayChecked ? ' checked' : '') + '" data-id="' + t.id + '"></div>' +
+          '<span>' + t.title + '</span>' +
+        '</div>' +
+        '<div class="task-bar"><div class="task-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="task-meta">' +
+          '<span class="task-day">' + checked + '/' + t.days + ' 天</span>' +
+          '<span>截止 ' + t.deadline + '</span>' +
+          (t.done ? '<span style="color:var(--teal)">✓ 完成</span>' : '') +
+          '<span class="task-del" data-id="' + t.id + '" style="cursor:pointer;color:var(--text3);margin-left:auto">🗑</span>' +
+        '</div>';
+      list.appendChild(item);
+    }
+
+    // Bind check clicks
+    var checks = list.querySelectorAll('.task-check');
+    for (var c = 0; c < checks.length; c++) {
+      checks[c].addEventListener('click', function() {
+        toggleTaskDay(this.getAttribute('data-id'));
+        _this._renderTasks();
+        // Affection: +3 for task check-in
+        var affR = addAffection(3, 'task');
+        if (affR.added > 0) {
+          _this.renderTopBar();
+          _this._showAffectionPopup(affR.added, '📋');
+        }
+      });
+    }
+
+    // Bind delete clicks
+    var dels = list.querySelectorAll('.task-del');
+    for (var d = 0; d < dels.length; d++) {
+      dels[d].addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (confirm('删除这个任务？')) {
+          deleteTask(this.getAttribute('data-id'));
+          _this._renderTasks();
+        }
+      });
+    }
+  },
+
+  _getTaskNikoMessage: function(taskCount) {
+    var reading = getTodayReading();
+    var taskLine = '';
+
+    if (taskCount === 0) {
+      taskLine = '暂时没有任务…不过需要我盯着的话，随时加。';
+    } else if (taskCount === 1) {
+      taskLine = '你还有 1 个任务…';
+    } else {
+      taskLine = '你还有 ' + taskCount + ' 个任务…';
+    }
+
+    // If no reading today, prompt to draw
+    if (!reading || !reading.cards) {
+      return taskLine + ' 还没抽牌呢。先看看今天的运势再来安排也不迟。';
+    }
+
+    var cards = reading.cards;
+    var uprightCount = 0;
+    var reversedCount = 0;
+    var specialNames = [];
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].position === 'upright') uprightCount++;
+      else reversedCount++;
+      specialNames.push(cards[i].name);
+    }
+
+    var boost = '';
+    var energy = '';
+
+    // Check for special cards
+    var hasSun = specialNames.indexOf('太阳') !== -1;
+    var hasStar = specialNames.indexOf('星星') !== -1;
+    var hasWorld = specialNames.indexOf('世界') !== -1;
+    var hasDeath = specialNames.indexOf('死神') !== -1;
+    var hasTower = specialNames.indexOf('高塔') !== -1;
+    var hasDevil = specialNames.indexOf('恶魔') !== -1;
+
+    if (hasSun || hasStar || hasWorld) {
+      energy = 'positive';
+      boost = '运势在帮你——';
+    } else if (hasDeath || hasTower || hasDevil) {
+      energy = 'gentle';
+      boost = '我知道今天不太轻松——';
+    } else if (uprightCount >= 2) {
+      energy = 'positive';
+      boost = '今天牌不错——';
+    } else if (reversedCount >= 2) {
+      energy = 'gentle';
+      boost = '牌说今天不用急——';
+    } else {
+      energy = 'neutral';
+      boost = '牌有好有坏——';
+    }
+
+    if (energy === 'positive' && taskCount > 0) {
+      return taskLine + ' ' + boost + '趁势搞定一个吧。';
+    } else if (energy === 'gentle' && taskCount > 0) {
+      return taskLine + ' ' + boost + '但哪怕只签到一个，也算没辜负今天。';
+    } else if (energy === 'neutral' && taskCount > 0) {
+      return taskLine + ' ' + boost + '挑一个简单的试试手气。';
+    }
+    return taskLine + ' ' + boost + '设个小任务试试吧。';
+  },
+
+  _addNewTask: function() {
+    var input = document.getElementById('task-create-input');
+    var days = this._taskDaysPicker.get();
+    var title = input.value.trim();
+    if (!title) return;
+    addTask(title, Math.min(Math.max(days, 1), 7));
+    input.value = '';
+    this._taskDaysPicker.set(3);
+    document.getElementById('task-create-overlay').classList.add('hidden');
+    this._renderTasks();
   },
 
   _generateChallenge: function() {
@@ -274,10 +523,6 @@ var App = {
       }
     });
 
-    // Calculate affection
-    var affection = calculateAffection();
-    updateNikoState({ affection: affection });
-
     // Check if drawn today
     if (hasDrawnToday()) {
       this.currentReading = getTodayReading();
@@ -332,11 +577,45 @@ var App = {
   // TOP BAR
   // ============================================================
   renderTopBar: function() {
-    var state = getNikoState();
-    var affection = state.affection;
+    var affection = getAffection();
 
     document.getElementById('affection-bar-fill').style.width = affection + '%';
     document.getElementById('affection-value').textContent = affection;
+
+    // Affection tooltip with relationship stage
+    var tip = document.getElementById('affection-tooltip');
+    if (tip) {
+      // Update stage line on each render
+      var stageEl = tip.querySelector('.tooltip-stage');
+      if (stageEl) stageEl.innerHTML = this._getRelationshipStageHTML();
+    } else {
+      var wrapper = document.querySelector('.affection-bar-wrapper');
+      tip = document.createElement('div');
+      tip.className = 'affection-tooltip';
+      tip.id = 'affection-tooltip';
+      tip.innerHTML =
+        '<div class="tooltip-stage">' + this._getRelationshipStageHTML() + '</div>' +
+        '<div class="tooltip-divider"></div>' +
+        '<strong>好感度怎么涨？</strong><br>' +
+        '🔮 每天抽牌 <strong>+3</strong><br>' +
+        '✍️ 填行为记录 <strong>+1/条</strong>（每天最多4）<br>' +
+        '📋 任务签到 <strong>+3</strong><br>' +
+        '⏳ 陪伴完成 <strong>+2</strong><br>' +
+        '<span class="tooltip-secret">😾 戳 Niko 也有惊喜…</span><br>' +
+        '<em style="color:var(--gold-dim)">—— Niko</em>';
+      wrapper.appendChild(tip);
+    }
+  },
+
+  _getRelationshipStageHTML: function() {
+    var aff = getAffection();
+    if (aff >= 67) {
+      return '💝 <strong>关系：羁绊·深心</strong><br><span style="font-size:11px;color:var(--text2)">Niko 偶尔说漏真心话…虽然立刻会收回去。</span>';
+    } else if (aff >= 34) {
+      return '💜 <strong>关系：羁绊·半心</strong><br><span style="font-size:11px;color:var(--text2)">吐槽里开始带了温度，"但是"后面是真话。</span>';
+    } else {
+      return '🐱 <strong>关系：初识</strong><br><span style="font-size:11px;color:var(--text2)">标准的傲娇距离感——关心都包装在嫌弃里。</span>';
+    }
   },
 
   // ============================================================
@@ -438,36 +717,18 @@ var App = {
     var daysInMonth = new Date(year, month + 1, 0).getDate();
     var firstDayOfWeek = new Date(year, month, 1).getDay();
 
-    // Gather data for this month
+    // Gather data for this month — simple: drawn or not
     var readings = getDailyReadings();
-    var behaviors = getDailyBehaviors();
     var dateLevels = {};
     var todayStr = getTodayDate();
 
     for (var d = 1; d <= daysInMonth; d++) {
       var dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
       var reading = null;
-      var behavior = null;
       for (var r = 0; r < readings.length; r++) {
         if (readings[r].date === dateStr) { reading = readings[r]; break; }
       }
-      for (var b = 0; b < behaviors.length; b++) {
-        if (behaviors[b].date === dateStr) { behavior = behaviors[b]; break; }
-      }
-
-      if (!reading) {
-        dateLevels[dateStr] = 0; // empty
-      } else if (!behavior || !behavior.submittedAt) {
-        dateLevels[dateStr] = 1; // drawn only
-      } else {
-        var filledCount = 0;
-        if (behavior.domains) {
-          for (var key in behavior.domains) {
-            if (behavior.domains[key] && behavior.domains[key].note && behavior.domains[key].note.trim() !== '') filledCount++;
-          }
-        }
-        dateLevels[dateStr] = filledCount >= 4 ? 3 : 2; // all filled vs partial
-      }
+      dateLevels[dateStr] = reading ? 1 : 0;
     }
 
     var dayHeaders = ['日', '一', '二', '三', '四', '五', '六'];
@@ -489,17 +750,15 @@ var App = {
       var levelClass = level === 0 ? 'empty' : 'level-' + level;
       var todayClass = dateStr === todayStr ? ' today-cell' : '';
 
-      cellsHtml += '<div class="calendar-cell ' + levelClass + todayClass + '" data-date="' + dateStr + '" title="' + getDateDisplay(dateStr) + '"></div>';
+      cellsHtml += '<div class="calendar-cell ' + levelClass + todayClass + '" data-date="' + dateStr + '" title="' + getDateDisplay(dateStr) + '">' + d + '</div>';
     }
 
     container.innerHTML =
       '<div class="calendar-month-label">' + monthLabel + '</div>' +
       '<div class="calendar-grid">' + headerHtml + cellsHtml + '</div>' +
       '<div class="calendar-legend">' +
-        '<span class="legend-cell empty" style="background:var(--bg2)"></span> 无' +
-        '<span class="legend-cell" style="background:rgba(196,163,90,.12)"></span> 抽牌' +
-        '<span class="legend-cell" style="background:rgba(196,163,90,.25)"></span> 部分' +
-        '<span class="legend-cell" style="background:rgba(196,163,90,.45)"></span> 全填' +
+        '<span class="legend-cell empty" style="background:rgba(255,255,255,.03)"></span> 无' +
+        '<span class="legend-cell" style="background:rgba(201,169,110,.25)"></span> 抽牌' +
       '</div>';
 
     // Click handlers on cells
@@ -533,14 +792,14 @@ var App = {
     var emoji = document.getElementById('niko-status-emoji');
     var text = document.getElementById('niko-status-text');
 
-    emoji.innerHTML = '<img src="images/niko-portrait.jpg" class="niko-status-portrait" alt="Niko">';
+    emoji.innerHTML = '<img src="images/niko-portrait.svg" class="niko-status-portrait" alt="Niko">';
 
     var statusLines = [];
     // Weather at top if available
     if (this._weatherData && !this._weatherData.error && this._weatherData.weather) {
       var w = this._weatherData;
       var weatherIcon = w.rainChance >= 50 ? '🌧' : w.temp >= 30 ? '☀️' : w.temp <= 5 ? '❄️' : '⛅';
-      statusLines.push(weatherIcon + ' ' + (w.city || '这里') + ' ' + w.weather + ' ' + w.temp + '°C');
+      statusLines.push(weatherIcon + ' ' + (w.city || '当前') + ' ' + w.weather + ' ' + w.temp + '°C');
     }
     if (topic) {
       statusLines.push(topic);
@@ -574,6 +833,96 @@ var App = {
     this.renderBehaviorForm();
     this.renderNikoResponses();
     this._toggleHistoryMode();
+  },
+
+  _getNikoObservation: function() {
+    var observations = [];
+
+    // 1. Behavior patterns (7 days)
+    var recentBehaviors = getRecentBehaviors(7);
+    var domainCounts = { clothing: 0, food: 0, living: 0, transport: 0 };
+    var fillDays = 0;
+    for (var i = 0; i < recentBehaviors.length; i++) {
+      var b = recentBehaviors[i];
+      if (!b.submittedAt) continue;
+      fillDays++;
+      for (var key in b.domains) {
+        if (b.domains[key] && b.domains[key].note) domainCounts[key]++;
+      }
+    }
+    var bestDomain = '';
+    var worstDomain = '';
+    var bestCount = 0, worstCount = 99;
+    var domainLabels = { clothing: '穿衣', food: '饮食', living: '居家', transport: '出行' };
+    for (var dk in domainCounts) {
+      if (domainCounts[dk] > bestCount) { bestCount = domainCounts[dk]; bestDomain = dk; }
+      if (domainCounts[dk] < worstCount) { worstCount = domainCounts[dk]; worstDomain = dk; }
+    }
+    if (fillDays >= 3 && bestCount >= 3) {
+      observations.push('最近 7 天你填了 ' + fillDays + ' 次记录…「' + domainLabels[bestDomain] + '」填得最勤。还不错。');
+    }
+    if (worstCount <= 1 && fillDays >= 3) {
+      observations.push('这 7 天「' + domainLabels[worstDomain] + '」几乎没填——我不是催你，只是刚好看到。');
+    }
+
+    // 2. Task progress
+    var tasks = getTasks();
+    var activeTasks = tasks.filter(function(t) { return !t.done; });
+    var urgentTasks = activeTasks.filter(function(t) {
+      return getDateOffset(getTodayDate(), 1) >= t.deadline;
+    });
+    if (urgentTasks.length > 0) {
+      observations.push('你有个任务「' + urgentTasks[0].title + '」快截止了——自己记得吧？');
+    } else if (activeTasks.length > 0) {
+      var bestTask = activeTasks.sort(function(a, b) { return b.checkedDays.length - a.checkedDays.length; })[0];
+      var pct = Math.round(bestTask.checkedDays.length / bestTask.days * 100);
+      if (pct >= 50) {
+        observations.push('「' + bestTask.title + '」进度 ' + pct + '% 了。继续。');
+      }
+    }
+    var doneTasks = tasks.filter(function(t) { return t.done; });
+    if (doneTasks.length > 0 && fillDays >= 3) {
+      observations.push('你已经完成了 ' + doneTasks.length + ' 个任务。不是表扬——就是陈述事实。');
+    }
+
+    // 3. Mood trends (7 days)
+    var moods = getMoodHistory(7);
+    if (moods.length >= 3) {
+      var moodCounts = {};
+      for (var m = 0; m < moods.length; m++) {
+        var md = moods[m].mood;
+        moodCounts[md] = (moodCounts[md] || 0) + 1;
+      }
+      var topMood = '', topMoodCount = 0;
+      var moodLabels = { happy: '开心', calm: '平静', tired: '疲惫', anxious: '焦虑', sad: '难过', excited: '兴奋' };
+      for (var mk in moodCounts) {
+        if (moodCounts[mk] > topMoodCount) { topMoodCount = moodCounts[mk]; topMood = mk; }
+      }
+      if (topMood === 'anxious' || topMood === 'tired') {
+        observations.push('最近 7 天你选了 ' + topMoodCount + ' 次' + (moodLabels[topMood] || topMood) + '…要看看牌吗？还是想聊聊。');
+      } else if (topMood === 'happy' || topMood === 'excited') {
+        observations.push('最近心情看起来不错——' + topMoodCount + ' 天的好状态。继续保持。');
+      }
+    }
+
+    // 4. Weather
+    if (this._weatherData && !this._weatherData.error) {
+      var w = this._weatherData;
+      if (w.rainChance >= 50) {
+        observations.push('今天' + (w.city || '这里') + w.rainChance + '% 概率下雨——出行注意。');
+      } else if (w.temp >= 33) {
+        observations.push('今天 ' + w.temp + '°C…别中暑。多喝水。');
+      } else if (w.temp <= 5) {
+        observations.push('外面只有 ' + w.temp + '°C。穿厚点出门——不是关心你。');
+      }
+    }
+
+    if (observations.length === 0) {
+      observations.push('最近 7 天没什么特别的…多来这里转转，我才好观察你。');
+    }
+
+    // Pick one randomly
+    return observations[Math.floor(Math.random() * observations.length)];
   },
 
   renderAIReading: function() {
@@ -729,6 +1078,15 @@ var App = {
         msgEl.textContent = NikoDialogue.behaviorIntro();
         document.getElementById('behavior-hint').textContent = '至少填一项，Niko 才不会生气';
       }
+
+      // Inject Niko observation card
+      var oldObserve = submitArea.querySelector('.niko-observe');
+      if (oldObserve) oldObserve.parentNode.removeChild(oldObserve);
+      var observeCard = document.createElement('div');
+      observeCard.className = 'niko-observe';
+      observeCard.innerHTML =
+        '<div class="niko-observe-label">🐱 七日观察</div>' + this._getNikoObservation();
+      submitArea.appendChild(observeCard);
     }
 
     container.innerHTML = '';
@@ -753,7 +1111,7 @@ var App = {
           '</div>' +
           '<div class="behavior-row-suggestion">Niko 建议：' + (sug || '——') + '</div>' +
           '<textarea class="behavior-note-textarea" id="behavior-note-' + domainKey + '" ' +
-            'placeholder="今天' + domain.label + '方面做了什么？写下来让 Niko 评评理…" ' +
+            'placeholder="' + domain.question + '" ' +
             (!_this.isToday ? 'disabled' : '') + ' rows="3">' +
             (existNote ? existNote.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : '') +
           '</textarea>';
@@ -915,6 +1273,10 @@ var App = {
 
     this._clearChat();
 
+    // Clean up reveal area from previous draw
+    var oldReveal = document.getElementById('card-reveal-area');
+    if (oldReveal && oldReveal.parentNode) oldReveal.parentNode.removeChild(oldReveal);
+
     // Ensure chat is visible
     var chatEl = document.getElementById('draw-chat');
     chatEl.style.display = '';
@@ -935,6 +1297,13 @@ var App = {
     this._messageQueue.push(NikoDialogue.drawPrompt());
     this._messageIndex = 0;
 
+    // Show click hint
+    var hint = document.createElement('div');
+    hint.className = 'click-hint';
+    hint.id = 'click-hint';
+    hint.innerHTML = '<span class="click-hint-text">点击任意位置继续…</span><span class="click-hint-dot">▼</span>';
+    document.getElementById('draw-overlay').appendChild(hint);
+
     // Show first bubble
     this._addChatBubble(this._messageQueue[0]);
     this._messageIndex = 1;
@@ -946,13 +1315,16 @@ var App = {
     var _dt = this;
     var overlay = document.getElementById('draw-overlay');
     this._drawClickHandler = function(e) {
-      // Don't advance if clicking interactive elements or chat itself
-      if (e.target.closest('.draw-actions') || e.target.closest('.selected-zone') || e.target.closest('.draw-chat')) return;
+      // Don't advance if clicking buttons
+      if (e.target.closest('.draw-actions') || e.target.closest('.selected-zone')) return;
       _dt._advanceChat();
     };
     overlay.addEventListener('click', this._drawClickHandler);
 
-    // Build fan deck
+    // Build fan deck (ensure visible)
+    var fanDeck = document.getElementById('fan-deck');
+    fanDeck.style.opacity = '1';
+    fanDeck.style.transition = '';
     this._buildFanDeck();
 
     // Reset selected zone
@@ -962,7 +1334,19 @@ var App = {
       '<div class="selected-slot"><span class="card-back-pattern">✦</span></div>' +
       '<div class="selected-slot"><span class="card-back-pattern">✦</span></div>';
 
-    document.getElementById('btn-confirm-draw').disabled = true;
+    // Reset redraw count
+    this._redrawLeft = 1;
+
+    var confirmBtn = document.getElementById('btn-confirm-draw');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = '🔮 确认抽牌';
+    confirmBtn.setAttribute('data-action', 'draw');
+
+    var resetBtn = document.getElementById('btn-reset-draw');
+    resetBtn.innerHTML = '🔄 重新选择 <span class="redraw-badge" id="redraw-badge">×' + this._redrawLeft + '</span>';
+    resetBtn.disabled = false;
+    resetBtn.style.opacity = '1';
+
     document.getElementById('draw-actions').style.display = 'flex';
 
     if (isFirstVisit) {
@@ -1012,9 +1396,14 @@ var App = {
     this._addChatBubble(this._messageQueue[this._messageIndex]);
     this._messageIndex++;
 
+    // Remove click hint on first interaction
+    var hint = document.getElementById('click-hint');
+    if (hint) { hint.style.opacity = '0'; hint.style.transition = 'opacity .4s ease'; }
+
     // Last message shown — fade out chat, unlock cards
     if (this._messageIndex >= this._messageQueue.length) {
       this._cardsLocked = false;
+      if (hint && hint.parentNode) hint.parentNode.removeChild(hint);
       document.querySelector('.fan-deck-stage').classList.remove('locked');
       // Fade out chat
       var chatEl = document.getElementById('draw-chat');
@@ -1062,12 +1451,64 @@ var App = {
     this.selectedFanCards = [];
     this.isDrawing = false;
     this._cardsLocked = false;
+    this._redrawLeft--;
 
-    // Show chat again
+    // Kill any pending transition timeout from previous draw
+    if (this._revealTimeout) {
+      clearTimeout(this._revealTimeout);
+      this._revealTimeout = null;
+    }
+
+    // Update badge
+    var badge = document.getElementById('redraw-badge');
+    if (badge) badge.textContent = '×' + this._redrawLeft;
+
+    // Disable reset if no redraws left
+    if (this._redrawLeft <= 0) {
+      var resetBtn = document.getElementById('btn-reset-draw');
+      resetBtn.disabled = true;
+      resetBtn.style.opacity = '.35';
+    }
+
+    // Undo today's reading — remove from storage and revert collection
+    var todayReading = getTodayReading();
+    if (todayReading && todayReading.cards) {
+      // Remove first draw's cards from collection
+      var unlocked = getUnlockedCards();
+      for (var c = 0; c < todayReading.cards.length; c++) {
+        var cid = todayReading.cards[c].cardId;
+        var idx = unlocked.indexOf(cid);
+        if (idx !== -1) unlocked.splice(idx, 1);
+      }
+      storageSet('niko_unlockedCards', unlocked);
+    }
+    var readings = getDailyReadings();
+    readings = readings.filter(function(r) { return r.date !== getTodayDate(); });
+    storageSet('niko_dailyReadings', readings);
+
+    // Remove reveal area and hint
+    var revealArea = document.getElementById('card-reveal-area');
+    if (revealArea && revealArea.parentNode) revealArea.parentNode.removeChild(revealArea);
+    var fanDeck = document.getElementById('fan-deck');
+    fanDeck.style.opacity = '1';
+    fanDeck.style.transition = '';
+    var hintEl = document.getElementById('click-hint');
+    if (hintEl && hintEl.parentNode) hintEl.parentNode.removeChild(hintEl);
+
+    // Restore slots visibility
+    var slots = document.querySelectorAll('#selected-slots .selected-slot');
+    for (var s = 0; s < slots.length; s++) {
+      slots[s].style.opacity = '1';
+      slots[s].style.transition = '';
+    }
+
+    // Show chat again with brief re-draw message
     var chatEl = document.getElementById('draw-chat');
     chatEl.style.display = '';
     chatEl.style.opacity = '1';
     chatEl.style.transition = '';
+    this._clearChat();
+    this._addChatBubble('…好吧，最后一次。认真选。');
 
     // Reset all fan cards
     var cards = document.querySelectorAll('.fan-card');
@@ -1083,7 +1524,8 @@ var App = {
       '<div class="selected-slot"><span class="card-back-pattern">✦</span></div>';
 
     document.getElementById('btn-confirm-draw').disabled = true;
-    this._addChatBubble('…重新选吧。反正我也没等多久。');
+    document.getElementById('btn-confirm-draw').setAttribute('data-action', 'draw');
+    document.getElementById('btn-confirm-draw').textContent = '🔮 确认抽牌';
   },
 
   _confirmDraw: function() {
@@ -1098,6 +1540,13 @@ var App = {
     // Save to storage
     saveTodayReading(drawnCards);
 
+    // Affection: daily draw +3
+    var affResult = addAffection(3, 'draw');
+    if (affResult.added > 0) {
+      _this.renderTopBar();
+      _this._showAffectionPopup(affResult.added, '🔮');
+    }
+
     // Update Niko state
     var state = getNikoState();
     state.totalDraws = (state.totalDraws || 0) + 1;
@@ -1108,45 +1557,47 @@ var App = {
       unlockCard(drawnCards[i].cardId);
     }
 
-    // Animate the selected cards flipping
+    // Reveal: cards fly out from slots, grow, show names
     this._addChatBubble('命运的丝线已经牵好了…来看看你抽到了什么——');
 
-    // Hide fan deck, show flip animation
     setTimeout(function() {
       var fanDeck = document.getElementById('fan-deck');
       fanDeck.style.opacity = '0';
       fanDeck.style.transition = 'opacity .5s ease';
 
-      // Animate selected slots
+      // Create reveal area for 3 big cards
+      var revealArea = document.createElement('div');
+      revealArea.className = 'card-reveal-area';
+      revealArea.id = 'card-reveal-area';
+      document.getElementById('draw-overlay-content').appendChild(revealArea);
+
+      // Animate cards flying out one by one
       var slots = document.querySelectorAll('#selected-slots .selected-slot');
       for (var s = 0; s < 3; s++) {
-        (function(slot, card) {
-          setTimeout(function() {
-            slot.style.transition = 'transform .6s ease';
-            slot.style.transform = 'rotateY(360deg)';
-            setTimeout(function() {
-              slot.innerHTML =
-                '<img src="images/tarot/' + card.cardId + '.jpg" ' +
-                'style="width:100%;height:100%;object-fit:cover;border-radius:6px;' +
-                (card.position === 'reversed' ? 'transform:rotate(180deg);' : '') + '">';
-            }, 250);
-          }, s * 300);
-        })(slots[s], drawnCards[s]);
-      }
-
-      // Reveal lines — staggered for drama but quick
-      for (var r = 0; r < 3; r++) {
         (function(idx, card) {
           setTimeout(function() {
+            // Hide the slot
+            slots[idx].style.opacity = '0';
+            slots[idx].style.transition = 'opacity .3s ease';
+
+            // Create flying card
+            var flyCard = document.createElement('div');
+            flyCard.className = 'reveal-fly-card';
+            flyCard.style.animationDelay = '0s';
+            flyCard.innerHTML =
+              '<div class="reveal-card-inner' + (card.position === 'reversed' ? ' reversed' : '') + '">' +
+                '<img src="images/tarot/' + card.cardId + '.jpg" class="reveal-card-img' + (card.position === 'reversed' ? ' reversed-img' : '') + '">' +
+                '<div class="reveal-card-name">' + card.name + '</div>' +
+                '<div class="reveal-card-pos ' + (card.position === 'upright' ? 'tag-upright' : 'tag-reversed') + '">' +
+                  SPREAD_POSITIONS[idx].title + ' · ' + (card.position === 'upright' ? '正位' : '逆位') +
+                '</div>' +
+              '</div>';
+            revealArea.appendChild(flyCard);
+
+            // Niko short line
             _this._addChatBubble(NikoDialogue.revealLine(idx));
-            setTimeout(function() {
-              var interp = getCardInterpretation(card.cardId, card.position);
-              if (interp) {
-                _this._addChatBubble(interp.interpretation.general);
-              }
-            }, 300);
-          }, idx * 800 + 500);
-        })(r, drawnCards[r]);
+          }, idx * 900);
+        })(s, drawnCards[s]);
       }
 
       // Check milestone
@@ -1154,23 +1605,16 @@ var App = {
       if (milestone) {
         setTimeout(function() {
           _this._addChatBubble(milestone);
-        }, 3 * 800 + 1000);
+        }, 3 * 900 + 500);
       }
 
-      // Transition to main view
-      setTimeout(function() {
-        _this.phase = 'main';
-        _this.currentReading = getTodayReading();
-        _this.currentBehavior = getTodayBehavior();
-        _this.viewDate = getTodayDate();
-        _this.isToday = true;
-
-        document.getElementById('draw-overlay').classList.add('hidden');
-        _this.renderMainView();
-
-        // Trigger AI reading
-        _this.renderAIReading();
-      }, 3 * 800 + 1500);
+      // Change confirm button to "enter main view"
+      _this._revealTimeout = setTimeout(function() {
+        var btn = document.getElementById('btn-confirm-draw');
+        btn.textContent = '✨ 进入今日运势';
+        btn.disabled = false;
+        btn.setAttribute('data-action', 'enter');
+      }, 3 * 900 + 1200);
 
     }, 400);
   },
@@ -1205,14 +1649,22 @@ var App = {
     saveTodayBehavior(domains);
     this.currentBehavior = getTodayBehavior();
 
+    // Affection: +1 per matched domain (max 4/day)
+    var matchedCount = 0;
+    for (var dk in domains) { if (domains[dk] && domains[dk].note) matchedCount++; }
+    for (var m = 0; m < matchedCount; m++) {
+      var affR = addAffection(1, 'behavior');
+      if (affR.added > 0 && m === matchedCount - 1) {
+        this.renderTopBar();
+        this._showAffectionPopup(matchedCount, '✍️');
+      }
+    }
+
     // Re-render responses section
     var section = document.getElementById('lane2-responses-section');
     section.classList.remove('hidden');
     this.renderNikoResponses();
 
-    // Update affection
-    var affection = calculateAffection();
-    updateNikoState({ affection: affection });
     this.renderTopBar();
 
     // Update calendar heatmap
@@ -1252,7 +1704,7 @@ var App = {
     // Niko's commentary on this card
     var nikoComment = NikoDialogue.cardDetailedComment(card, card.position);
     document.getElementById('modal-niko-comment').innerHTML =
-      '<span class="niko-comment-avatar"><img src="images/niko-portrait.jpg" class="bubble-avatar-img" alt="Niko"></span>' +
+      '<span class="niko-comment-avatar"><img src="images/niko-portrait.svg" class="bubble-avatar-img" alt="Niko"></span>' +
       '<span class="niko-comment-text">"' + nikoComment + '"</span>';
 
     modal.classList.remove('hidden');
@@ -1297,10 +1749,11 @@ var App = {
 
     // Stats
     document.getElementById('milestones-stats').innerHTML =
-      '<div class="milestone-stat"><div class="milestone-stat-num">' + state.totalDraws + '</div><div class="milestone-stat-label">抽牌次数</div></div>' +
+      '<div class="milestone-stat"><div class="milestone-stat-num">' + readings.length + '</div><div class="milestone-stat-label">抽牌天数</div></div>' +
       '<div class="milestone-stat"><div class="milestone-stat-num">' + state.consecutiveActiveDays + '</div><div class="milestone-stat-label">连续天数</div></div>' +
       '<div class="milestone-stat"><div class="milestone-stat-num">' + getUnlockedCards().length + '</div><div class="milestone-stat-label">收集牌数</div></div>' +
-      '<div class="milestone-stat"><div class="milestone-stat-num">' + moods.length + '</div><div class="milestone-stat-label">心情记录</div></div>';
+      '<div class="milestone-stat"><div class="milestone-stat-num">' + moods.length + '</div><div class="milestone-stat-label">心情记录</div></div>' +
+      '<div class="milestone-stat"><div class="milestone-stat-num">' + (storageGet('niko_companionSessions', 0)) + '</div><div class="milestone-stat-label">陪伴次数</div></div>';
 
     // Timeline
     var timeline = document.getElementById('milestones-timeline');
@@ -1466,6 +1919,30 @@ var App = {
     this._showToast('📊', review);
   },
 
+  _checkAffectionMilestones: function() {
+    // Milestones are now reflected in the tooltip via _getRelationshipStageHTML
+  },
+
+  _showAffectionPopup: function(amount, icon) {
+    var wrapper = document.querySelector('.affection-bar-wrapper');
+    if (!wrapper) return;
+    var popup = document.createElement('div');
+    popup.className = 'affection-popup';
+    popup.textContent = '+' + amount + ' ' + (icon || '✨');
+    wrapper.style.position = 'relative';
+    wrapper.appendChild(popup);
+    setTimeout(function() { if (popup.parentNode) popup.parentNode.removeChild(popup); }, 2100);
+
+    // Check milestones
+    this._checkAffectionMilestones();
+
+    // Pulse bar
+    var fill = document.getElementById('affection-bar-fill');
+    fill.style.transform = 'scaleX(1.03)';
+    fill.style.transition = 'transform .2s ease';
+    setTimeout(function() { fill.style.transform = 'scaleX(1)'; fill.style.transition = 'transform .4s ease'; }, 200);
+  },
+
   _showToast: function(emoji, msg) {
     var toast = document.createElement('div');
     toast.style.cssText =
@@ -1503,7 +1980,7 @@ var App = {
     var bubble = document.createElement('div');
     bubble.className = 'chat-bubble';
     bubble.innerHTML =
-      '<div class="bubble-avatar"><img src="images/niko-portrait.jpg" class="bubble-avatar-img" alt="Niko"></div>' +
+      '<div class="bubble-avatar"><img src="images/niko-portrait.svg" class="bubble-avatar-img" alt="Niko"></div>' +
       '<div class="bubble-content">' +
         '<div class="bubble-text">' + text.replace(/\n/g, '<br>') + '</div>' +
       '</div>';
@@ -1555,7 +2032,19 @@ var App = {
 
     // Draw overlay
     document.getElementById('btn-confirm-draw').addEventListener('click', function() {
-      _this._confirmDraw();
+      var action = this.getAttribute('data-action');
+      if (action === 'enter') {
+        _this.phase = 'main';
+        _this.currentReading = getTodayReading();
+        _this.currentBehavior = getTodayBehavior();
+        _this.viewDate = getTodayDate();
+        _this.isToday = true;
+        document.getElementById('draw-overlay').classList.add('hidden');
+        _this.renderMainView();
+        _this.renderAIReading();
+      } else {
+        _this._confirmDraw();
+      }
     });
 
     document.getElementById('btn-reset-draw').addEventListener('click', function() {
@@ -1578,6 +2067,38 @@ var App = {
     });
     document.getElementById('btn-export-data').addEventListener('click', function() {
       downloadExport();
+    });
+
+    document.getElementById('btn-import-data').addEventListener('click', function() {
+      document.getElementById('import-file-input').click();
+    });
+
+    document.getElementById('import-file-input').addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        try {
+          var data = JSON.parse(ev.target.result);
+          if (!data.readings && !data.nikoState) { alert('文件格式不对哦～'); return; }
+          if (!confirm('确定要导入这份备份吗？当前数据将被覆盖。')) return;
+          // Restore all data
+          if (data.readings) localStorage.setItem('niko_dailyReadings', JSON.stringify(data.readings));
+          if (data.behaviors) localStorage.setItem('niko_dailyBehaviors', JSON.stringify(data.behaviors));
+          if (data.nikoState) localStorage.setItem('niko_nikoState', JSON.stringify(data.nikoState));
+          if (data.unlockedCards) localStorage.setItem('niko_unlockedCards', JSON.stringify(data.unlockedCards));
+          if (data.config) localStorage.setItem('niko_config', JSON.stringify(data.config));
+          localStorage.removeItem('niko_weatherCache');
+          localStorage.removeItem('niko_chatHistory');
+          localStorage.removeItem('niko_moodHistory');
+          alert('备份已恢复！即将刷新页面。');
+          location.reload();
+        } catch (e) {
+          alert('导入失败：' + e.message);
+        }
+      };
+      reader.readAsText(file);
+      this.value = '';
     });
     document.getElementById('btn-reset-data').addEventListener('click', function() {
       _this._resetData();
@@ -1611,11 +2132,23 @@ var App = {
 
     // Poke Niko easter egg (click on top bar center)
     document.getElementById('top-bar-niko').addEventListener('click', function() {
+      // If today hasn't been drawn yet → start daily draw
+      if (!hasDrawnToday()) {
+        _this.phase = 'draw';
+        _this.showDrawOverlay();
+        return;
+      }
+
+      // Already drawn today → easter egg
+      var affR2 = addAffection(1, 'poke');
+      if (affR2.added > 0) {
+        _this.renderTopBar();
+        _this._showAffectionPopup(1, '😾');
+      }
       if (Math.random() < 0.15) {
         var reaction = NikoDialogue.exposedReaction();
         _this._showToast('🙀', reaction);
       } else {
-        // Normal poke reactions
         var normalPokes = [
           '…干嘛？',
           '别碰我的斗篷！',
@@ -1646,19 +2179,134 @@ var App = {
     // ---- Chat mood picker ----
     _this._initMoodPicker();
 
-    // ---- Chat challenge button ----
+    // ---- Companion mode button ----
     document.getElementById('btn-chat-challenge').addEventListener('click', function() {
-      var panel = document.getElementById('challenge-panel');
+      var panel = document.getElementById('companion-panel');
       if (panel.classList.contains('hidden')) {
-        var challenges = getActiveChallenges();
-        if (challenges.length === 0) {
-          _this._generateChallenge();
-          _this._addChatMessage('niko', '给你布置了一个新挑战…别偷懒！我会盯着的。');
-        }
         panel.classList.remove('hidden');
+        document.getElementById('companion-start-area').classList.remove('hidden');
+        document.getElementById('companion-active-area').classList.add('hidden');
       } else {
         panel.classList.add('hidden');
       }
+    });
+
+    // ---- Companion close ----
+    document.getElementById('btn-close-companion').addEventListener('click', function() {
+      document.getElementById('companion-panel').classList.add('hidden');
+    });
+
+    // ---- Scroll picker helper ----
+    function initScrollPicker(pickerId, min, max, step, format) {
+      var picker = document.getElementById(pickerId);
+      var valueEl = picker.querySelector('.scroll-picker-value');
+      var upBtn = picker.querySelector('.scroll-picker-btn.up');
+      var downBtn = picker.querySelector('.scroll-picker-btn.down');
+
+      function setVal(v) {
+        v = Math.max(min, Math.min(max, v));
+        valueEl.setAttribute('data-value', v);
+        valueEl.textContent = format ? format(v) : (v < 10 ? '0' + v : v);
+      }
+      function getVal() { return parseInt(valueEl.getAttribute('data-value')) || min; }
+
+      upBtn.addEventListener('click', function() {
+        var v = getVal() + step;
+        if (v > max && pickerId === 'comp-hour-picker') v = min;
+        setVal(v);
+      });
+      downBtn.addEventListener('click', function() {
+        var v = getVal() - step;
+        if (v < min && pickerId === 'comp-hour-picker') v = max;
+        setVal(v);
+      });
+      return { set: setVal, get: getVal };
+    }
+
+    _this._hourPicker = initScrollPicker('comp-hour-picker', 0, 23, 1, function(v) { return (v < 10 ? '0' : '') + v; });
+    _this._minPicker = initScrollPicker('comp-min-picker', 0, 59, 1, function(v) { return (v < 10 ? '0' : '') + v; });
+    _this._taskDaysPicker = initScrollPicker('task-days-picker', 1, 7, 1);
+
+    // Live validation for companion start button
+    function updateCompanionStartBtn() {
+      var btn = document.getElementById('btn-start-companion');
+      var activePreset = document.querySelector('#companion-durations .companion-preset.active');
+      var hasPreset = activePreset && activePreset.textContent.indexOf('自定义') === -1;
+      var total = hasPreset ? parseInt(activePreset.getAttribute('data-min')) : (_this._hourPicker.get() * 60 + _this._minPicker.get());
+      btn.disabled = total <= 0;
+    }
+    // Watch pickers
+    document.getElementById('comp-hour-picker').addEventListener('click', updateCompanionStartBtn);
+    document.getElementById('comp-min-picker').addEventListener('click', updateCompanionStartBtn);
+    // ---- Companion duration presets ----
+    var compPresets = document.querySelectorAll('#companion-durations .companion-preset');
+    for (var cp = 0; cp < compPresets.length; cp++) {
+      compPresets[cp].addEventListener('click', function() {
+        for (var c = 0; c < compPresets.length; c++) compPresets[c].classList.remove('active');
+        this.classList.add('active');
+        document.getElementById('companion-pickers').style.display = 'none';
+      });
+    }
+    // Clicking any preset deselects custom — clicking the "+" area shows pickers
+    // Actually, let the user click a "自定义" button instead
+    // For now: if no preset active, show pickers
+    // Add a "自定义" preset
+    var customPreset = document.createElement('button');
+    customPreset.className = 'companion-preset';
+    customPreset.textContent = '自定义';
+    customPreset.addEventListener('click', function() {
+      for (var c = 0; c < compPresets.length; c++) compPresets[c].classList.remove('active');
+      customPreset.classList.add('active');
+      document.getElementById('companion-pickers').style.display = 'flex';
+    });
+    document.getElementById('companion-durations').appendChild(customPreset);
+
+    // Now bind validation after all presets exist
+    for (var cp2 = 0; cp2 < compPresets.length; cp2++) {
+      compPresets[cp2].addEventListener('click', function() { setTimeout(updateCompanionStartBtn, 50); });
+    }
+    // Also add customPreset to the NodeList's click listener
+    customPreset.addEventListener('click', function() { setTimeout(updateCompanionStartBtn, 50); });
+
+    // ---- Companion categories ----
+    var compCats = document.querySelectorAll('#companion-categories .companion-cat');
+    for (var cc = 0; cc < compCats.length; cc++) {
+      compCats[cc].addEventListener('click', function() {
+        for (var c = 0; c < compCats.length; c++) compCats[c].classList.remove('active');
+        this.classList.add('active');
+      });
+    }
+
+    // ---- Start companion ----
+    document.getElementById('btn-start-companion').addEventListener('click', function() {
+      _this._startCompanion();
+    });
+
+    // ---- Stop companion ----
+    document.getElementById('btn-stop-companion').addEventListener('click', function() {
+      _this._stopCompanion(true);
+    });
+
+    // ---- Tasks panel ----
+    document.getElementById('btn-open-tasks').addEventListener('click', function() {
+      _this._openTasksPanel();
+    });
+    document.getElementById('btn-close-tasks').addEventListener('click', function() {
+      document.getElementById('tasks-panel').classList.add('hidden');
+    });
+    // Task creation flow
+    document.getElementById('btn-show-task-create').addEventListener('click', function() {
+      document.getElementById('task-create-overlay').classList.remove('hidden');
+      document.getElementById('task-create-input').focus();
+    });
+    document.getElementById('btn-cancel-task-create').addEventListener('click', function() {
+      document.getElementById('task-create-overlay').classList.add('hidden');
+    });
+    document.getElementById('btn-confirm-task-create').addEventListener('click', function() {
+      _this._addNewTask();
+    });
+    document.getElementById('task-create-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') _this._addNewTask();
     });
 
     // ---- Mood button in chat header ----
@@ -1669,6 +2317,27 @@ var App = {
       } else {
         picker.classList.add('hidden');
       }
+    });
+
+    // ---- Background brightness slider ----
+    var dimSlider = document.getElementById('chat-dim-slider');
+    var dimRange = document.getElementById('chat-dim-range');
+    var dimVal = document.getElementById('chat-dim-val');
+    var nikoBg = document.getElementById('chat-niko-bg');
+
+    document.getElementById('btn-chat-dim').addEventListener('click', function() {
+      if (dimSlider.classList.contains('hidden')) {
+        dimSlider.classList.remove('hidden');
+      } else {
+        dimSlider.classList.add('hidden');
+      }
+    });
+
+    dimRange.addEventListener('input', function() {
+      var v = parseInt(this.value);
+      dimVal.textContent = v + '%';
+      var img = nikoBg.querySelector('img');
+      if (img) img.style.opacity = (v / 100);
     });
 
     // ---- Close challenge panel ----
