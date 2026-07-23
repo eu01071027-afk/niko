@@ -220,34 +220,110 @@ function getNikoDailyTopic() {
 // Affection Calculation
 // ============================================================
 
+// ============================================================
+// Affection — Event-based (0-100)
+// ============================================================
+
+function getAffection() {
+  return storageGet('niko_affection', 0);
+}
+
+function _getAffectionEvents() {
+  var today = getTodayDate();
+  var events = storageGet('niko_affectionEvents', {});
+  if (events.date !== today) {
+    events = { date: today, draw: false, poke: false, tasks: false, companionCount: 0, behaviorMatches: 0 };
+  }
+  return events;
+}
+
+function _saveAffectionEvents(events) {
+  storageSet('niko_affectionEvents', events);
+}
+
+function addAffection(amount, eventType) {
+  var current = getAffection();
+  var events = _getAffectionEvents();
+  var today = getTodayDate();
+
+  // Daily limits
+  if (eventType === 'draw' && events.draw) return { added: 0, total: current };
+  if (eventType === 'poke' && events.poke) return { added: 0, total: current };
+  if (eventType === 'task' && events.tasks) return { added: 0, total: current };
+  if (eventType === 'behavior' && events.behaviorMatches >= 4) return { added: 0, total: current };
+
+  // Apply
+  var newTotal = Math.min(current + amount, 100);
+  storageSet('niko_affection', newTotal);
+
+  // Check relationship milestones
+  if (current < 34 && newTotal >= 34) unlockAchievement('bondMid');
+  if (current < 67 && newTotal >= 67) unlockAchievement('bondHigh');
+  if (current < 100 && newTotal >= 100) unlockAchievement('bondMax');
+
+  // Track event
+  if (eventType === 'draw') events.draw = true;
+  if (eventType === 'poke') events.poke = true;
+  if (eventType === 'task') events.tasks = true;
+  if (eventType === 'behavior') events.behaviorMatches = Math.min((events.behaviorMatches || 0) + 1, 4);
+  if (eventType === 'companion') events.companionCount = (events.companionCount || 0) + 1;
+
+  _saveAffectionEvents(events);
+
+  return { added: amount, total: newTotal };
+}
+
+// For backward compatibility — called from init
 function calculateAffection() {
-  var state = getNikoState();
-  var cd = state.consecutiveActiveDays;
-  var total = state.totalDraws;
+  return getAffection();
+}
 
-  // Base: consecutive days (capped at 365)
-  var base = Math.min(cd, 365);
+// ============================================================
+// Relationship Achievements
+// ============================================================
 
-  // Bonus: behavior fill rate over last 7 days (any text = filled)
-  var behaviors = getDailyBehaviors();
-  var filledCount = 0;
-  for (var i = 0; i < behaviors.length; i++) {
-    var b = behaviors[i];
-    var filled = 0;
-    if (b.domains) {
-      for (var key in b.domains) {
-        if (b.domains[key] && b.domains[key].note && b.domains[key].note.trim() !== '') filled++;
-      }
-      if (filled >= 3) filledCount++;
+// States: 'locked' | 'unlocked' | 'viewed'
+function getAchievements() {
+  return storageGet('niko_achievements', {
+    firstChat: 'locked',
+    bondMid: 'locked',
+    bondHigh: 'locked',
+    bondMax: 'locked'
+  });
+}
+
+function unlockAchievement(key) {
+  var achievements = getAchievements();
+  if (achievements[key] !== 'locked') return false;
+  achievements[key] = 'unlocked';
+  storageSet('niko_achievements', achievements);
+  return true;
+}
+
+function isAchievementUnlocked(key) {
+  var achievements = getAchievements();
+  return achievements[key] === 'unlocked' || achievements[key] === 'viewed';
+}
+
+function getUnviewedAchievementCount() {
+  var achievements = getAchievements();
+  var count = 0;
+  for (var key in achievements) {
+    if (achievements[key] === 'unlocked') count++;
+  }
+  return count;
+}
+
+function markAllAchievementsViewed() {
+  var achievements = getAchievements();
+  var changed = false;
+  for (var key in achievements) {
+    if (achievements[key] === 'unlocked') {
+      achievements[key] = 'viewed';
+      changed = true;
     }
   }
-  var fillBonus = Math.min(filledCount * 3, 30);
-
-  // Total draws bonus
-  var drawBonus = Math.min(total, 20);
-
-  var affection = Math.min(base + fillBonus + drawBonus, 100);
-  return Math.max(affection, 0);
+  if (changed) storageSet('niko_achievements', achievements);
 }
 
 // ============================================================
@@ -498,4 +574,69 @@ function cleanExpiredChallenges() {
   var today = getTodayDate();
   challenges = challenges.filter(function(c) { return c.endDate >= today; });
   storageSet('niko_challenges', challenges);
+}
+
+// ============================================================
+// Long-term Tasks
+// ============================================================
+
+function getTasks() {
+  return storageGet('niko_tasks', []);
+}
+
+function addTask(title, days) {
+  var tasks = getTasks();
+  var created = getTodayDate();
+  var deadline = getDateOffset(created, parseInt(days) || 3);
+  tasks.push({
+    id: 't_' + Date.now(),
+    title: title,
+    days: parseInt(days) || 3,
+    created: created,
+    deadline: deadline,
+    checkedDays: [],
+    done: false
+  });
+  storageSet('niko_tasks', tasks);
+}
+
+function toggleTaskDay(taskId) {
+  var tasks = getTasks();
+  var today = getTodayDate();
+  for (var i = 0; i < tasks.length; i++) {
+    if (tasks[i].id === taskId) {
+      var idx = tasks[i].checkedDays.indexOf(today);
+      if (idx === -1) {
+        tasks[i].checkedDays.push(today);
+      } else {
+        tasks[i].checkedDays.splice(idx, 1);
+      }
+      // Auto-mark done if all days checked
+      var totalDays = tasks[i].days;
+      if (tasks[i].checkedDays.length >= totalDays) {
+        tasks[i].done = true;
+      }
+      storageSet('niko_tasks', tasks);
+      return true;
+    }
+  }
+  return false;
+}
+
+function markTaskDone(taskId) {
+  var tasks = getTasks();
+  for (var i = 0; i < tasks.length; i++) {
+    if (tasks[i].id === taskId) {
+      tasks[i].done = !tasks[i].done;
+      storageSet('niko_tasks', tasks);
+      return true;
+    }
+  }
+  return false;
+}
+
+function deleteTask(taskId) {
+  var tasks = getTasks();
+  tasks = tasks.filter(function(t) { return t.id !== taskId; });
+  storageSet('niko_tasks', tasks);
 }
