@@ -96,7 +96,7 @@ function getMinorDetailedMeaning(card, position) {
   if (!rankInfo) return '';
   var rankDesc = rankInfo[position] || rankInfo.upright;
   var keywords = card.keywords[position];
-  return card.name + '。' + suitDesc + ' ' + rankDesc + ' 关键词：' + keywords.join('、') + '。';
+  return card.name + '。' + suitDesc + ' ' + rankDesc;
 }
 
 /**
