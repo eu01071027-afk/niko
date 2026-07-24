@@ -171,11 +171,10 @@
           <button class="btn-icon" id="btn-chat-dim" title="调整背景亮度">💡</button>
           <div class="chat-dim-slider hidden" id="chat-dim-slider">
             <span class="chat-dim-slider-label">背景</span>
-            <input type="range" id="chat-dim-range" min="20" max="55" value="45">
-            <span class="chat-dim-slider-label" id="chat-dim-val">45%</span>
+            <input type="range" id="chat-dim-range" min="20" max="100" value="100">
+            <span class="chat-dim-slider-label" id="chat-dim-val">100%</span>
           </div>
           <button class="btn-icon" id="btn-chat-challenge" title="陪伴模式">⏳</button>
-          <button class="btn-icon" id="btn-chat-mood" title="记录心情">💭</button>
         </div>
       </div>
 
@@ -263,6 +262,7 @@
       <div class="chat-input-area">
         <input type="text" class="chat-input" id="chat-input"
                placeholder="和 Niko 说点什么…" autocomplete="off">
+        <span class="chat-enter-hint">Enter 发送</span>
         <button class="btn btn-primary btn-sm" id="btn-chat-send">发送</button>
       </div>
     </div>
