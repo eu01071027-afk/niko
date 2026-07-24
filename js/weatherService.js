@@ -16,12 +16,13 @@ var WeatherService = {
     95: '雷暴', 96: '冰雹雷暴', 99: '强冰雹雷暴'
   },
 
-  // Get cached or fetch fresh
+  // Get cached or fetch fresh (stores 7-day history)
   getWeather: function() {
-    var cache = storageGet(this._cacheKey, null);
+    var history = storageGet(this._cacheKey, []);
     var today = getTodayDate();
-    if (cache && cache.date === today) {
-      return Promise.resolve(cache);
+    // Check if today is already in history
+    for (var i = 0; i < history.length; i++) {
+      if (history[i].date === today) return Promise.resolve(history[i]);
     }
     return this._fetchFresh();
   },
@@ -48,7 +49,10 @@ var WeatherService = {
           rainChance: data.daily.precipitation_probability_max[0] || 0,
           raw: code
         };
-        storageSet(_this._cacheKey, result);
+        var history = storageGet(_this._cacheKey, []);
+        history.push(result);
+        if (history.length > 7) history = history.slice(-7);
+        storageSet(_this._cacheKey, history);
         return result;
       });
     }).catch(function() {
