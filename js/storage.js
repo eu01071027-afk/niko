@@ -518,7 +518,9 @@ function buildBehaviorMemory() {
 // ============================================================
 
 function getTodayMood() {
-  return storageGet('niko_todayMood', null);
+  var mood = storageGet('niko_todayMood', null);
+  if (mood && mood.date === getTodayDate()) return mood;
+  return null;
 }
 
 function setTodayMood(mood) {
