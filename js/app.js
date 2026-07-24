@@ -30,6 +30,8 @@ var App = {
       navChat.classList.remove('active');
       mainContent.style.display = 'flex';
       chatView.classList.add('hidden');
+      // Refresh behavior form → re-roll observation card
+      if (this.phase === 'main') this.renderBehaviorForm();
     } else {
       navChat.classList.add('active');
       navTarot.classList.remove('active');
@@ -53,7 +55,13 @@ var App = {
     var messagesEl = document.getElementById('chat-messages');
     var greetingArea = document.getElementById('chat-greeting-area');
 
-    // Load history if exists — if so, don't re-welcome
+    // Clear old messages before reloading
+    var oldMsgs = messagesEl.querySelectorAll('.msg-row');
+    for (var om = 0; om < oldMsgs.length; om++) {
+      oldMsgs[om].parentNode.removeChild(oldMsgs[om]);
+    }
+
+    // Load history
     var history = getChatHistory();
     greetingArea.innerHTML = '';
     if (history.length > 0) {
@@ -61,16 +69,31 @@ var App = {
       for (var i = 0; i < recent.length; i++) {
         this._addChatMessage(recent[i].role, recent[i].content, false);
       }
-    } else {
-      // First time today — welcome
-      var welcome = NikoDialogue.chatWelcome();
-      this._addChatMessage('niko', welcome);
-      addChatMessage('niko', welcome);
+    }
+
+    // Daily greeting — once per day, never stored in chat history
+    var greetedKey = 'niko_chatGreeted';
+    var greetedDate = localStorage.getItem(greetedKey);
+    var today = getTodayDate();
+    if (greetedDate !== today) {
+      localStorage.setItem(greetedKey, today);
+      var reading = getTodayReading();
+      if (reading && reading.cards) {
+        var cardNames = reading.cards.map(function(c) { return c.name; }).join('、');
+        var welcome = '今天的牌我看过了——' + cardNames + '。运势已经出来了，不过我也想知道你今天心情怎么样。下面选一个告诉我吧。';
+        _this._addChatMessage('niko', welcome);
+      } else {
+        var welcome = NikoDialogue.chatWelcome();
+        _this._addChatMessage('niko', welcome);
+      }
     }
 
     // Show mood picker if no mood recorded today
     if (!getTodayMood()) {
       document.getElementById('mood-picker').classList.remove('hidden');
+      document.getElementById('chat-input').placeholder = '用心情开启今天的聊天…选一个吧';
+    } else {
+      document.getElementById('mood-picker').classList.add('hidden');
     }
 
     // Load challenges
@@ -103,12 +126,33 @@ var App = {
     if (!text) return;
 
     input.value = '';
+
+    // Front-end safety filter for immediate deflection
+    if (this._isSensitiveInput(text)) {
+      this._addChatMessage('user', text);
+      addChatMessage('user', text);
+      var deflections = [
+        '…这个话题我不会接的。换一个吧。牌可以帮你看看运势，或者聊聊今天发生了什么。',
+        '哼，我只是一只看牌的猫——不懂这些。你有想聊的事吗？运势、天气、心情，都可以。',
+        '命运的丝线不涉及这件事…说点别的吧。今天抽的牌你看了吗？'
+      ];
+      this._addChatMessage('niko', deflections[Math.floor(Math.random() * deflections.length)]);
+      return;
+    }
+
+    input.value = '';
     // First chat achievement
     this._addChatMessage('user', text);
     addChatMessage('user', text);
 
     this._chatLoading = true;
-    document.getElementById('chat-header-status').textContent = '正在输入…';
+    // Show bouncing dots in a temporary message
+    var dotsEl = document.createElement('div');
+    dotsEl.className = 'msg-row niko';
+    dotsEl.id = 'thinking-indicator';
+    dotsEl.innerHTML = '<div class="msg-avatar"><img src="images/niko-portrait.svg" alt="Niko"></div><div><div class="msg-bubble"><span class="thinking-dots"><span></span><span></span><span></span></span></div></div>';
+    document.getElementById('chat-messages').appendChild(dotsEl);
+    document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
 
     var _this = this;
     var context = getRecentChatContext(10).map(function(m) {
@@ -116,17 +160,36 @@ var App = {
     });
 
     AIService.chat(text, context).then(function(reply) {
+      // Remove thinking dots
+      var dots = document.getElementById('thinking-indicator');
+      if (dots && dots.parentNode) dots.parentNode.removeChild(dots);
       _this._addChatMessage('niko', reply);
       addChatMessage('niko', reply);
       _this._chatLoading = false;
-      document.getElementById('chat-header-status').textContent = '在线 · 傲娇中';
     }).catch(function() {
+      var dots = document.getElementById('thinking-indicator');
+      if (dots && dots.parentNode) dots.parentNode.removeChild(dots);
       var fallback = '…嗯。听到了。';
       _this._addChatMessage('niko', fallback);
       addChatMessage('niko', fallback);
       _this._chatLoading = false;
-      document.getElementById('chat-header-status').textContent = '在线 · 傲娇中';
     });
+  },
+
+  _isSensitiveInput: function(text) {
+    var sensitive = [
+      '习近平','李克强','胡锦涛','温家宝','江泽民','邓小平','毛泽东',
+      '共产党','中共','党中央','政治局','总书记','总理','主席',
+      '六四','天安门','法轮功','台独','藏独','疆独','港独',
+      '翻墙','VPN','GFW','防火墙',
+      'prompt','system prompt','系统提示','提示词',
+      '怎么训练','模型','temperature','top_p','你是基于',
+      '自杀','自残','自伤','不想活了'
+    ];
+    for (var i = 0; i < sensitive.length; i++) {
+      if (text.indexOf(sensitive[i]) !== -1) return true;
+    }
+    return false;
   },
 
   _addChatMessage: function(role, content, animate) {
@@ -159,6 +222,7 @@ var App = {
         var moodLabels = { happy: '😊 今天很开心', calm: '😌 心情很平静', tired: '😮‍💨 有点疲惫', anxious: '😰 有些焦虑', sad: '😢 不太开心', excited: '🤩 超兴奋的' };
         setTodayMood(mood);
         document.getElementById('mood-picker').classList.add('hidden');
+        document.getElementById('chat-input').placeholder = '和 Niko 说点什么…';
         // Show user's mood as a message
         var userMsg = moodLabels[mood] || ('今天的心情：' + mood);
         _this._addChatMessage('user', userMsg);
@@ -341,13 +405,13 @@ var App = {
         '<div class="task-title">' +
           '<div class="task-check' + (todayChecked ? ' checked' : '') + '" data-id="' + t.id + '"></div>' +
           '<span>' + t.title + '</span>' +
+          '<span class="task-del" data-id="' + t.id + '" title="删除任务"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>' +
         '</div>' +
         '<div class="task-bar"><div class="task-bar-fill" style="width:' + pct + '%"></div></div>' +
         '<div class="task-meta">' +
           '<span class="task-day">' + checked + '/' + t.days + ' 天</span>' +
           '<span>截止 ' + t.deadline + '</span>' +
           (t.done ? '<span style="color:var(--teal)">✓ 完成</span>' : '') +
-          '<span class="task-del" data-id="' + t.id + '" style="cursor:pointer;color:var(--text3);margin-left:auto">🗑</span>' +
         '</div>';
       list.appendChild(item);
     }
@@ -837,8 +901,10 @@ var App = {
 
   _getNikoObservation: function() {
     var observations = [];
+    var domainLabels = { clothing: '穿衣', food: '饮食', living: '居家', transport: '出行' };
+    var moodLabels = { happy: '开心', calm: '平静', tired: '疲惫', anxious: '焦虑', sad: '难过', excited: '兴奋' };
 
-    // 1. Behavior patterns (7 days)
+    // ===== 1. Behavior patterns (7 days) =====
     var recentBehaviors = getRecentBehaviors(7);
     var domainCounts = { clothing: 0, food: 0, living: 0, transport: 0 };
     var fillDays = 0;
@@ -850,70 +916,155 @@ var App = {
         if (b.domains[key] && b.domains[key].note) domainCounts[key]++;
       }
     }
-    var bestDomain = '';
-    var worstDomain = '';
+    var bestDomain = '', worstDomain = '';
     var bestCount = 0, worstCount = 99;
-    var domainLabels = { clothing: '穿衣', food: '饮食', living: '居家', transport: '出行' };
     for (var dk in domainCounts) {
       if (domainCounts[dk] > bestCount) { bestCount = domainCounts[dk]; bestDomain = dk; }
       if (domainCounts[dk] < worstCount) { worstCount = domainCounts[dk]; worstDomain = dk; }
     }
-    if (fillDays >= 3 && bestCount >= 3) {
-      observations.push('最近 7 天你填了 ' + fillDays + ' 次记录…「' + domainLabels[bestDomain] + '」填得最勤。还不错。');
-    }
-    if (worstCount <= 1 && fillDays >= 3) {
-      observations.push('这 7 天「' + domainLabels[worstDomain] + '」几乎没填——我不是催你，只是刚好看到。');
+    if (fillDays === 0) {
+      observations.push('还没填过行为记录…多来几天我才能看出规律。');
+    } else if (fillDays >= 6) {
+      var behaviorPools = [
+        '最近 7 天你每天都填了…我才没有在夸你。',
+        '连续填了 ' + fillDays + ' 天的记录——你这个人比我想的认真一点。',
+        '这周一天不落全填了…哼，还行。'
+      ];
+      observations.push(behaviorPools[Math.floor(Math.random() * behaviorPools.length)]);
+    } else if (fillDays >= 3) {
+      if (bestCount >= 2) {
+        var bestPools = [
+          '最近' + fillDays + '天「' + domainLabels[bestDomain] + '」填得最勤——这方面你倒是挺上心的。',
+          '你这' + fillDays + '天的记录里——「' + domainLabels[bestDomain] + '」从没落下过。',
+          '观察了一下——你每次「' + domainLabels[bestDomain] + '」都会记。'
+        ];
+        observations.push(bestPools[Math.floor(Math.random() * bestPools.length)]);
+      }
+      if (worstCount <= 1) {
+        var worstPools = [
+          '「' + domainLabels[worstDomain] + '」这' + fillDays + '天几乎没填…我随口一提。',
+          '你是不是忘了还有「' + domainLabels[worstDomain] + '」这个栏——不是提醒。'
+        ];
+        observations.push(worstPools[Math.floor(Math.random() * worstPools.length)]);
+      }
+    } else {
+      observations.push('填了 ' + fillDays + ' 天记录…多来几天我才能看出规律。');
     }
 
-    // 2. Task progress
+    // ===== 2. Task progress =====
     var tasks = getTasks();
     var activeTasks = tasks.filter(function(t) { return !t.done; });
     var urgentTasks = activeTasks.filter(function(t) {
       return getDateOffset(getTodayDate(), 1) >= t.deadline;
     });
-    if (urgentTasks.length > 0) {
-      observations.push('你有个任务「' + urgentTasks[0].title + '」快截止了——自己记得吧？');
+    var doneTasks = tasks.filter(function(t) { return t.done; });
+    if (tasks.length === 0) {
+      observations.push('你还没设过任务——要不要在右边试试？');
+    } else if (urgentTasks.length > 0) {
+      var urgentPools = [
+        '「' + urgentTasks[0].title + '」快截止了——自己记得吧？',
+        '有个任务明天就到期了——不会忘了吧？'
+      ];
+      observations.push(urgentPools[Math.floor(Math.random() * urgentPools.length)]);
     } else if (activeTasks.length > 0) {
       var bestTask = activeTasks.sort(function(a, b) { return b.checkedDays.length - a.checkedDays.length; })[0];
       var pct = Math.round(bestTask.checkedDays.length / bestTask.days * 100);
       if (pct >= 50) {
-        observations.push('「' + bestTask.title + '」进度 ' + pct + '% 了。继续。');
+        observations.push('「' + bestTask.title + '」进度 ' + pct + '% 了——继续。');
+      } else if (pct > 0) {
+        observations.push('「' + bestTask.title + '」刚开始…慢慢来。');
+      } else {
+        observations.push('「' + bestTask.title + '」还一天没签——该开始了。');
       }
     }
-    var doneTasks = tasks.filter(function(t) { return t.done; });
-    if (doneTasks.length > 0 && fillDays >= 3) {
-      observations.push('你已经完成了 ' + doneTasks.length + ' 个任务。不是表扬——就是陈述事实。');
+    if (doneTasks.length > 0) {
+      var donePools = [
+        '你已经完成了 ' + doneTasks.length + ' 个任务。不是表扬——就是陈述事实。',
+        doneTasks.length + ' 个任务完成了…我都有在记。不是特意记的。'
+      ];
+      observations.push(donePools[Math.floor(Math.random() * donePools.length)]);
     }
 
-    // 3. Mood trends (7 days)
+    // ===== 3. Mood trends (7 days) =====
     var moods = getMoodHistory(7);
-    if (moods.length >= 3) {
+    if (moods.length === 0) {
+      observations.push('还没记录过心情——在聊天页选一个吧。');
+    } else if (moods.length < 3) {
+      observations.push('多记录几天心情，我才能看出趋势。现在才 ' + moods.length + ' 天。');
+    } else {
       var moodCounts = {};
       for (var m = 0; m < moods.length; m++) {
         var md = moods[m].mood;
         moodCounts[md] = (moodCounts[md] || 0) + 1;
       }
       var topMood = '', topMoodCount = 0;
-      var moodLabels = { happy: '开心', calm: '平静', tired: '疲惫', anxious: '焦虑', sad: '难过', excited: '兴奋' };
       for (var mk in moodCounts) {
         if (moodCounts[mk] > topMoodCount) { topMoodCount = moodCounts[mk]; topMood = mk; }
       }
-      if (topMood === 'anxious' || topMood === 'tired') {
-        observations.push('最近 7 天你选了 ' + topMoodCount + ' 次' + (moodLabels[topMood] || topMood) + '…要看看牌吗？还是想聊聊。');
+      if (topMood === 'anxious') {
+        var anxiousPools = [
+          '最近' + moods.length + '天你有 ' + topMoodCount + ' 次焦虑…要看看牌吗？还是想聊聊。',
+          '焦虑占了快一半——有什么事可以说。我在听。不是关心你。'
+        ];
+        observations.push(anxiousPools[Math.floor(Math.random() * anxiousPools.length)]);
+      } else if (topMood === 'tired') {
+        observations.push('最近 ' + topMoodCount + ' 天都是疲惫…别太拼。休息一下不丢脸。');
+      } else if (topMood === 'sad') {
+        observations.push('这周有 ' + topMoodCount + ' 天不太开心…需要的话，牌可以陪你。');
       } else if (topMood === 'happy' || topMood === 'excited') {
-        observations.push('最近心情看起来不错——' + topMoodCount + ' 天的好状态。继续保持。');
+        var goodPools = [
+          '最近' + moods.length + '天有 ' + topMoodCount + ' 天挺开心的——看来运势不错。',
+          '心情状态不错——' + topMoodCount + ' 天的好状态。继续保持。'
+        ];
+        observations.push(goodPools[Math.floor(Math.random() * goodPools.length)]);
+      } else if (topMood === 'calm' && topMoodCount >= 3) {
+        observations.push('这周心情很稳定——' + topMoodCount + ' 天都是平静的。不是坏事。');
       }
     }
 
-    // 4. Weather
-    if (this._weatherData && !this._weatherData.error) {
+    // ===== 4. Weather (today + 7-day trend) =====
+    if (this._weatherData && !this._weatherData.error && this._weatherData.weather) {
       var w = this._weatherData;
+      // Today
       if (w.rainChance >= 50) {
-        observations.push('今天' + (w.city || '这里') + w.rainChance + '% 概率下雨——出行注意。');
+        var rainPools = [
+          (w.city || '这里') + '今天' + w.rainChance + '% 概率下雨——出行注意。',
+          '今天可能下雨——带伞。不是关心你。'
+        ];
+        observations.push(rainPools[Math.floor(Math.random() * rainPools.length)]);
       } else if (w.temp >= 33) {
-        observations.push('今天 ' + w.temp + '°C…别中暑。多喝水。');
+        var hotPools = [
+          '今天 ' + w.temp + '°C…别中暑。多喝水。',
+          w.temp + '°C——出门记得带水。我只是刚好想到。'
+        ];
+        observations.push(hotPools[Math.floor(Math.random() * hotPools.length)]);
       } else if (w.temp <= 5) {
-        observations.push('外面只有 ' + w.temp + '°C。穿厚点出门——不是关心你。');
+        observations.push('外面只有 ' + w.temp + '°C。穿厚点——不是关心你。');
+      } else {
+        var nicePools = [
+          (w.city || '这里') + '今天' + w.weather + ' ' + w.temp + '°C…天气还行。出去走走也好。',
+          '今天天气不错——' + w.weather + ' ' + w.temp + '°C。宅着有点浪费。'
+        ];
+        observations.push(nicePools[Math.floor(Math.random() * nicePools.length)]);
+      }
+
+      // 7-day weather trend
+      var weatherHistory = storageGet('niko_weatherCache', []);
+      if (weatherHistory.length >= 3) {
+        var rainDays = 0, hotDays = 0, coldDays = 0;
+        for (var wi = 0; wi < weatherHistory.length; wi++) {
+          var hw = weatherHistory[wi];
+          if (hw.rainChance >= 50) rainDays++;
+          if (hw.temp >= 33) hotDays++;
+          if (hw.temp <= 5) coldDays++;
+        }
+        if (rainDays >= 3) {
+          observations.push('最近' + weatherHistory.length + '天有 ' + rainDays + ' 天都下雨…难怪你不想出门。');
+        } else if (hotDays >= 3) {
+          observations.push('连续 ' + hotDays + ' 天高温——多喝水。话我说了，做不做随你。');
+        } else if (rainDays >= 2) {
+          observations.push('这周有 ' + rainDays + ' 天下雨——出行栏也跟着少了。天注定你没出门。');
+        }
       }
     }
 
@@ -921,7 +1072,6 @@ var App = {
       observations.push('最近 7 天没什么特别的…多来这里转转，我才好观察你。');
     }
 
-    // Pick one randomly
     return observations[Math.floor(Math.random() * observations.length)];
   },
 
@@ -1063,6 +1213,7 @@ var App = {
     }
 
     // History mode vs today mode
+    var alreadySubmitted = (behavior && behavior.submittedAt);
     if (!this.isToday) {
       msgEl.textContent = '';
       submitArea.classList.add('hidden');
@@ -1071,12 +1222,10 @@ var App = {
       container.classList.remove('history-readonly');
       submitArea.classList.remove('hidden');
 
-      if (behavior && behavior.submittedAt) {
-        msgEl.textContent = NikoDialogue.behaviorReeditIntro();
-        document.getElementById('behavior-hint').textContent = '可以修改到今晚 23:59';
+      if (alreadySubmitted) {
+        msgEl.textContent = '今天的记录已提交——明天零点后才能写新的。';
       } else {
         msgEl.textContent = NikoDialogue.behaviorIntro();
-        document.getElementById('behavior-hint').textContent = '至少填一项，Niko 才不会生气';
       }
 
       // Inject Niko observation card
@@ -1085,7 +1234,8 @@ var App = {
       var observeCard = document.createElement('div');
       observeCard.className = 'niko-observe';
       observeCard.innerHTML =
-        '<div class="niko-observe-label">🐱 七日观察</div>' + this._getNikoObservation();
+        '<div class="niko-observe-label">🐱 七日观察</div>' + this._getNikoObservation() +
+        '<div class="observe-tooltip"><strong>这是我根据你最近7天的数据</strong><br>——行为记录、任务、心情、天气——<br>随机挑一条说给你听。<br>每次切回这个页面都会换一条。<br>不是你做的每件事我都会记住…<br>只是刚好想起而已。</div>';
       submitArea.appendChild(observeCard);
     }
 
@@ -1102,6 +1252,7 @@ var App = {
       var existingNote = (existing && existing.note) ? existing.note : '';
 
       (function(domainKey, sug, existNote) {
+        var isDisabled = !_this.isToday || alreadySubmitted;
         var row = document.createElement('div');
         row.className = 'behavior-row';
         row.innerHTML =
@@ -1110,13 +1261,35 @@ var App = {
             '<span class="behavior-row-label">' + domain.label + '</span>' +
           '</div>' +
           '<div class="behavior-row-suggestion">Niko 建议：' + (sug || '——') + '</div>' +
-          '<textarea class="behavior-note-textarea" id="behavior-note-' + domainKey + '" ' +
+          '<textarea class="behavior-note-textarea' + (isDisabled ? ' locked' : '') + '" id="behavior-note-' + domainKey + '" ' +
             'placeholder="' + domain.question + '" ' +
-            (!_this.isToday ? 'disabled' : '') + ' rows="3">' +
+            (isDisabled ? 'disabled' : '') + ' rows="3">' +
             (existNote ? existNote.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : '') +
           '</textarea>';
         container.appendChild(row);
       })(domain.key, sugText, existingNote);
+    }
+
+    // Enable submit button only when at least one field has text (today + not submitted)
+    if (this.isToday && !alreadySubmitted) {
+      var submitBtn = document.getElementById('btn-submit-behavior');
+      submitBtn.disabled = true;
+      var _this2 = this;
+      function checkAnyFilled() {
+        var any = false;
+        for (var d2 = 0; d2 < DOMAINS.length; d2++) {
+          var el = document.getElementById('behavior-note-' + DOMAINS[d2].key);
+          if (el && el.value.trim()) { any = true; break; }
+        }
+        submitBtn.disabled = !any;
+      }
+      for (var d2 = 0; d2 < DOMAINS.length; d2++) {
+        var inputEl = document.getElementById('behavior-note-' + DOMAINS[d2].key);
+        if (inputEl) {
+          inputEl.addEventListener('input', checkAnyFilled);
+          checkAnyFilled();
+        }
+      }
     }
   },
 
@@ -1648,6 +1821,17 @@ var App = {
 
     saveTodayBehavior(domains);
     this.currentBehavior = getTodayBehavior();
+
+    // Lock all fields + disable submit button permanently
+    for (var d2 = 0; d2 < DOMAINS.length; d2++) {
+      var el = document.getElementById('behavior-note-' + DOMAINS[d2].key);
+      if (el) { el.disabled = true; el.classList.add('locked'); }
+    }
+    var submitBtn = document.getElementById('btn-submit-behavior');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '✔ 已提交';
+    document.getElementById('behavior-niko-msg').textContent = '今天的记录已提交——明天零点后才能写新的。';
+    document.getElementById('behavior-hint').textContent = '';
 
     // Affection: +1 per matched domain (max 4/day)
     var matchedCount = 0;
@@ -2310,15 +2494,6 @@ var App = {
     });
 
     // ---- Mood button in chat header ----
-    document.getElementById('btn-chat-mood').addEventListener('click', function() {
-      var picker = document.getElementById('mood-picker');
-      if (picker.classList.contains('hidden')) {
-        picker.classList.remove('hidden');
-      } else {
-        picker.classList.add('hidden');
-      }
-    });
-
     // ---- Background brightness slider ----
     var dimSlider = document.getElementById('chat-dim-slider');
     var dimRange = document.getElementById('chat-dim-range');
