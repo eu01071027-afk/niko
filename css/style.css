@@ -1466,9 +1466,9 @@ body.has-locked-companion .nav-tab:hover{ background:transparent; border-color:r
 
 .draw-overlay-bg{
   position:absolute; inset:0;
-  background:rgba(8,6,18,.92);
-  backdrop-filter:blur(16px);
-  -webkit-backdrop-filter:blur(16px);
+  background: url('../images/draw-bg.png') center/cover no-repeat;
+  backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
 }
 
 .draw-overlay-content{
