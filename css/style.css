@@ -696,6 +696,7 @@ body.has-locked-companion .nav-tab:hover{ background:transparent; border-color:r
   position:relative; z-index:1;
   height:100vh;
   display:flex; flex-direction:column;
+  background: url('../images/main-bg.png') center/cover no-repeat;
 }
 
 /* ============================================================
